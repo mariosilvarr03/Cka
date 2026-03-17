@@ -2,6 +2,9 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import AdminChargesFilterForm from "@/app/components/AdminChargesFilterForm";
+import AdminAthleteNameFilterForm from "@/app/components/AdminAthleteNameFilterForm";
 
 type AdminPageProps = {
   searchParams: Promise<{
@@ -9,8 +12,14 @@ type AdminPageProps = {
     year?: string;
     q?: string;
     paymentStatus?: string;
+    eventId?: string;
+    athleteName?: string;
     ok?: string;
     error?: string;
+    eventOk?: string;
+    eventError?: string;
+    accountOk?: string;
+    accountError?: string;
   }>;
 };
 
@@ -29,12 +38,26 @@ type Product = {
   id: string;
   name: string;
   type: "monthly_fee" | "event_registration" | "other";
+  event_id: string | null;
+};
+
+type EventOption = {
+  id: string;
+  title: string;
+  event_date: string;
+  status: "draft" | "open" | "closed" | "cancelled";
 };
 
 type AthleteProfile = {
   user_id: string;
   full_name: string;
   email: string | null;
+};
+
+type CategoryOption = {
+  id: number;
+  name: string;
+  monthly_fee: number;
 };
 
 type Payment = {
@@ -54,6 +77,147 @@ function formatMonthYear(month: number, year: number) {
 }
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
+  async function createAthleteAccount(formData: FormData) {
+    "use server";
+
+    const fullName = String(formData.get("full_name") ?? "").trim();
+    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const password = String(formData.get("password") ?? "").trim();
+    const categoryId = Number(formData.get("category_id") ?? 0);
+
+    if (!fullName || !email || !password || !Number.isInteger(categoryId) || categoryId <= 0) {
+      redirect("/admin?accountError=Preenche+nome+email+password+e+categoria");
+    }
+
+    if (password.length < 8) {
+      redirect("/admin?accountError=A+password+deve+ter+pelo+menos+8+caracteres");
+    }
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      redirect("/login");
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (profile?.role !== "admin") {
+      redirect("/");
+    }
+
+    const adminClient = createAdminClient();
+    const { data: createdData, error: createError } = await adminClient.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: fullName,
+      },
+    });
+
+    if (createError || !createdData.user?.id) {
+      redirect("/admin?accountError=Falha+ao+criar+conta+de+acesso");
+    }
+
+    const createdUserId = createdData.user.id;
+
+    const { error: profileError } = await adminClient
+      .from("profiles")
+      .update({
+        full_name: fullName,
+        email,
+        role: "athlete",
+        category_id: categoryId,
+        active: true,
+      })
+      .eq("user_id", createdUserId);
+
+    if (profileError) {
+      redirect("/admin?accountError=Conta+criada+mas+falhou+atualizacao+de+perfil");
+    }
+
+    revalidatePath("/admin");
+    redirect("/admin?accountOk=1");
+  }
+
+  async function createEvent(formData: FormData) {
+    "use server";
+
+    const title = String(formData.get("event_title") ?? "").trim();
+    const eventDate = String(formData.get("event_date") ?? "").trim();
+    const paymentDeadline = String(formData.get("payment_deadline") ?? "").trim();
+    const selectedAthleteIds = formData.getAll("athlete_ids").map((value) => String(value));
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      redirect("/login");
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (profile?.role !== "admin") {
+      redirect("/");
+    }
+
+    if (!title || !eventDate) {
+      redirect("/admin?eventError=Preenche+nome+e+data+do+evento");
+    }
+
+    if (selectedAthleteIds.length === 0) {
+      redirect("/admin?eventError=Seleciona+pelo+menos+um+atleta");
+    }
+
+    const registrations: Array<{ athlete_user_id: string; amount: number }> = [];
+
+    for (const athleteId of selectedAthleteIds) {
+      const rawAmount = String(formData.get(`amount_${athleteId}`) ?? "0").trim();
+      const amount = Number(rawAmount);
+
+      if (!Number.isFinite(amount) || amount < 0) {
+        redirect("/admin?eventError=Existem+valores+invalidos+na+lista+de+atletas");
+      }
+
+      registrations.push({
+        athlete_user_id: athleteId,
+        amount,
+      });
+    }
+
+    const { error } = await supabase.rpc("admin_create_event_with_registrations", {
+      p_title: title,
+      p_event_date: eventDate,
+      p_payment_deadline: paymentDeadline || null,
+      p_registration_deadline: null,
+      p_description: null,
+      p_registrations: registrations,
+    });
+
+    if (error) {
+      redirect(`/admin?eventError=${encodeURIComponent("Falha ao criar evento")}`);
+    }
+
+    revalidatePath("/admin");
+    revalidatePath("/");
+    redirect("/admin?eventOk=1");
+  }
+
   async function markCashPayment(formData: FormData) {
     "use server";
 
@@ -64,6 +228,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     const year = Number(formData.get("year") ?? 0);
     const search = String(formData.get("q") ?? "").trim();
     const paymentStatus = String(formData.get("payment_status") ?? "all");
+    const eventId = String(formData.get("event_id") ?? "all");
 
     const redirectParams = new URLSearchParams({
       month: String(month),
@@ -76,6 +241,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
     if (paymentStatus === "paid" || paymentStatus === "pending") {
       redirectParams.set("paymentStatus", paymentStatus);
+    }
+
+    if (eventId && eventId !== "all") {
+      redirectParams.set("eventId", eventId);
     }
 
     const supabase = await createClient();
@@ -136,10 +305,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     params.paymentStatus === "paid" || params.paymentStatus === "pending"
       ? params.paymentStatus
       : "all";
-  const isGlobalSearch = searchQuery.length > 0;
-
-  const months = Array.from({ length: 12 }, (_, i) => i + 1);
-  const years = Array.from({ length: 3 }, (_, i) => today.getFullYear() - 1 + i);
+  const selectedEventId = String(params.eventId ?? "all");
+  const athleteNameFilter = String(params.athleteName ?? "").trim().toLowerCase();
+  const isGlobalSearch = searchQuery.length > 0 || selectedEventId !== "all";
 
   const supabase = await createClient();
 
@@ -189,7 +357,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const { data: products } = productIds.length
     ? await supabase
         .from("products")
-        .select("id, name, type")
+        .select("id, name, type, event_id")
         .in("id", productIds)
         .returns<Product[]>()
     : { data: [] as Product[] };
@@ -202,6 +370,35 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         .order("paid_at", { ascending: false })
         .returns<Payment[]>()
     : { data: [] as Payment[] };
+
+  const { data: athleteOptions } = await supabase
+    .from("profiles")
+    .select("user_id, full_name, email")
+    .eq("role", "athlete")
+    .eq("active", true)
+    .order("full_name", { ascending: true })
+    .returns<AthleteProfile[]>();
+
+  const { data: events } = await supabase
+    .from("events")
+    .select("id, title, event_date, status")
+    .order("event_date", { ascending: false })
+    .returns<EventOption[]>();
+
+  const { data: categories } = await supabase
+    .from("categories")
+    .select("id, name, monthly_fee")
+    .eq("active", true)
+    .order("name", { ascending: true })
+    .returns<CategoryOption[]>();
+
+  const filteredAthleteOptions = (athleteOptions ?? []).filter((athlete) => {
+    if (!athleteNameFilter) {
+      return true;
+    }
+
+    return athlete.full_name.toLowerCase().includes(athleteNameFilter);
+  });
 
   const athletesById = new Map((athletes ?? []).map((a) => [a.user_id, a]));
   const productsById = new Map((products ?? []).map((p) => [p.id, p]));
@@ -234,8 +431,30 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       paymentStatus === "all" ||
       (paymentStatus === "paid" ? alreadyPaid : !alreadyPaid);
 
-    return matchesSearch && matchesPaymentStatus;
+    const matchesEvent = selectedEventId === "all" || product?.event_id === selectedEventId;
+
+    return matchesSearch && matchesPaymentStatus && matchesEvent;
   });
+
+  const selectedEvent = (events ?? []).find((event) => event.id === selectedEventId);
+
+  const selectedEventSummary = filteredCharges.reduce(
+    (acc, charge) => {
+      const payment = latestPaymentByChargeId.get(charge.id);
+      const alreadyPaid = charge.status === "paid" || Boolean(payment);
+
+      acc.total += 1;
+      if (alreadyPaid) {
+        acc.paid += 1;
+      } else {
+        acc.pending += 1;
+      }
+      acc.amount += charge.amount;
+
+      return acc;
+    },
+    { total: 0, paid: 0, pending: 0, amount: 0 },
+  );
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-7xl px-5 py-8 md:px-8 md:py-10">
@@ -251,6 +470,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
         <Link
           href="/"
+          scroll={false}
           className="btn-ghost inline-flex h-10 items-center rounded-lg px-4 font-medium hover:bg-white"
         >
           Voltar ao portal atleta
@@ -259,66 +479,218 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       </header>
 
       <section className="surface-card mb-6 rounded-2xl p-4 md:p-5">
-        <form className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_1.5fr_1fr_auto] md:items-end">
-          <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
-            Mes
-            <select
-              name="month"
-              defaultValue={selectedMonth}
-              className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
-            >
-              {months.map((month) => (
-                <option key={month} value={month}>
-                  {monthFormatter.format(new Date(2026, month - 1, 1))}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-zinc-900">Criar conta de atleta</h2>
+          <p className="text-sm text-zinc-600">Cria a conta com password inicial. Depois o atleta pode alterar a password na area de conta.</p>
+        </div>
 
+        <form action={createAthleteAccount} className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-[1.2fr_1fr_1fr_1fr_auto] md:items-end">
           <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
-            Ano
-            <select
-              name="year"
-              defaultValue={selectedYear}
-              className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
-            >
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
-            Pesquisar atleta
+            Nome
             <input
               type="text"
-              name="q"
-              defaultValue={params.q ?? ""}
-              placeholder="Ex: atleta1"
+              name="full_name"
+              required
+              placeholder="Ex: Joao Silva"
               className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
             />
           </label>
 
           <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
-            Estado
+            Email
+            <input
+              type="email"
+              name="email"
+              required
+              placeholder="atleta@exemplo.pt"
+              className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+            />
+          </label>
+
+          <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
+            Password inicial
+            <input
+              type="password"
+              name="password"
+              required
+              minLength={8}
+              placeholder="Minimo 8 caracteres"
+              className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+            />
+          </label>
+
+          <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
+            Categoria
             <select
-              name="paymentStatus"
-              defaultValue={paymentStatus}
+              name="category_id"
+              required
               className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
             >
-              <option value="all">Todos</option>
-              <option value="pending">Por pagar</option>
-              <option value="paid">Pago</option>
+              <option value="">Selecionar</option>
+              {(categories ?? []).map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name} ({Number(category.monthly_fee).toFixed(2)} EUR)
+                </option>
+              ))}
             </select>
           </label>
 
-          <button type="submit" className="btn-primary h-10 rounded-lg px-4 font-semibold">
-            Aplicar filtros
+          <button type="submit" className="btn-primary h-10 rounded-lg px-5 font-semibold">
+            Enviar convite
+          </button>
+        </form>
+
+        {params.accountOk ? (
+          <div className="mb-4 rounded-lg border border-ok/20 bg-emerald-50 p-3 text-sm text-ok">
+            Conta criada com sucesso. Partilha email e password inicial com o atleta.
+          </div>
+        ) : null}
+
+        {params.accountError ? (
+          <div className="mb-4 rounded-lg border border-danger/20 bg-red-50 p-3 text-sm text-danger">
+            {params.accountError}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="surface-card mb-6 rounded-2xl p-4 md:p-5">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-zinc-900">Criar evento</h2>
+          <p className="text-sm text-zinc-600">Define o evento, seleciona os atletas inscritos e o valor individual de cada inscricao.</p>
+        </div>
+
+        <AdminAthleteNameFilterForm athleteName={params.athleteName ?? ""} />
+
+        <form action={createEvent} className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
+              Nome do evento
+              <input
+                type="text"
+                name="event_title"
+                required
+                placeholder="Ex: Campeonato Regional"
+                className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+              />
+            </label>
+
+            <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
+              Data do evento
+              <input
+                type="date"
+                name="event_date"
+                required
+                className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+              />
+            </label>
+
+            <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
+              Data limite de pagamento
+              <input
+                type="date"
+                name="payment_deadline"
+                className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+              />
+            </label>
+          </div>
+
+          <div className="rounded-xl border border-line/80 bg-white/70 p-4">
+            <p className="sticky top-0 z-10 mb-3 border-b border-line/70 bg-white/95 pb-2 text-sm font-semibold text-zinc-800 backdrop-blur-sm">
+              Atletas inscritos e valor a pagar
+            </p>
+
+            {filteredAthleteOptions.length === 0 ? (
+              <p className="text-sm text-zinc-600">Sem atletas ativos para adicionar ao evento.</p>
+            ) : (
+              <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                {filteredAthleteOptions.map((athlete) => (
+                  <div
+                    key={athlete.user_id}
+                    className="grid grid-cols-1 gap-3 rounded-lg border border-line/70 bg-white p-3 md:grid-cols-[1fr_auto] md:items-center"
+                  >
+                    <label className="flex items-start gap-3 text-sm text-zinc-800">
+                      <input type="checkbox" name="athlete_ids" value={athlete.user_id} className="mt-1" />
+                      <span>
+                        <strong className="block">{athlete.full_name}</strong>
+                        {athlete.email ? <span className="text-zinc-500">{athlete.email}</span> : null}
+                      </span>
+                    </label>
+
+                    <label className="flex items-center gap-2 text-sm font-semibold text-zinc-700">
+                      Valor (EUR)
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        defaultValue="0"
+                        name={`amount_${athlete.user_id}`}
+                        className="h-10 w-28 rounded-lg border border-line bg-white px-3 text-zinc-900"
+                      />
+                    </label>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button type="submit" className="btn-primary h-10 rounded-lg px-5 font-semibold">
+            Criar evento
           </button>
         </form>
       </section>
+
+      {params.eventOk ? (
+        <div className="surface-card mb-4 rounded-lg border border-ok/20 bg-emerald-50 p-3 text-sm text-ok">
+          Evento criado com sucesso.
+        </div>
+      ) : null}
+
+      {params.eventError ? (
+        <div className="surface-card mb-4 rounded-lg border border-danger/20 bg-red-50 p-3 text-sm text-danger">
+          {params.eventError}
+        </div>
+      ) : null}
+
+      <section className="surface-card sticky top-4 z-20 mb-6 rounded-2xl p-4 md:p-5 backdrop-blur-sm">
+        <AdminChargesFilterForm
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
+          searchQuery={params.q ?? ""}
+          paymentStatus={paymentStatus}
+          selectedEventId={selectedEventId}
+          events={(events ?? []).map((event) => ({ id: event.id, title: event.title }))}
+        />
+      </section>
+
+      {selectedEvent ? (
+        <section className="surface-card mb-6 rounded-2xl p-4 md:p-5">
+          <div className="mb-3">
+            <h2 className="text-lg font-semibold text-zinc-900">Resumo do evento</h2>
+            <p className="text-sm text-zinc-600">
+              {selectedEvent.title} | {new Date(selectedEvent.event_date).toLocaleDateString("pt-PT")} | Estado: {selectedEvent.status}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <div className="rounded-xl border border-line/80 bg-white/75 p-3">
+              <p className="text-xs uppercase tracking-widest text-muted">Inscricoes</p>
+              <p className="mt-1 text-xl font-semibold text-foreground">{selectedEventSummary.total}</p>
+            </div>
+            <div className="rounded-xl border border-line/80 bg-white/75 p-3">
+              <p className="text-xs uppercase tracking-widest text-muted">Pagas</p>
+              <p className="mt-1 text-xl font-semibold text-ok">{selectedEventSummary.paid}</p>
+            </div>
+            <div className="rounded-xl border border-line/80 bg-white/75 p-3">
+              <p className="text-xs uppercase tracking-widest text-muted">Por pagar</p>
+              <p className="mt-1 text-xl font-semibold text-warn">{selectedEventSummary.pending}</p>
+            </div>
+            <div className="rounded-xl border border-line/80 bg-white/75 p-3">
+              <p className="text-xs uppercase tracking-widest text-muted">Total (EUR)</p>
+              <p className="mt-1 text-xl font-semibold text-foreground">{selectedEventSummary.amount.toFixed(2)}</p>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {params.ok ? (
         <div className="surface-card mb-4 rounded-lg border border-ok/20 bg-emerald-50 p-3 text-sm text-ok">
@@ -344,7 +716,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </div>
       ) : null}
 
-      <section className="space-y-4">
+      <section className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
         {filteredCharges.map((charge) => {
           const athlete = athletesById.get(charge.athlete_user_id);
           const product = productsById.get(charge.product_id);
@@ -387,6 +759,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   <input type="hidden" name="year" value={String(selectedYear)} />
                   <input type="hidden" name="q" value={params.q ?? ""} />
                   <input type="hidden" name="payment_status" value={paymentStatus} />
+                  <input type="hidden" name="event_id" value={selectedEventId} />
 
                   <input
                     type="text"

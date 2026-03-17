@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import AthletePeriodFilterForm from "@/app/components/AthletePeriodFilterForm";
 
 type PageProps = {
   searchParams: Promise<{
@@ -19,6 +20,17 @@ type Charge = {
   billing_year: number | null;
 };
 
+type Event = {
+  id: string;
+  title: string;
+  event_date: string;
+};
+
+type EventRegistration = {
+  event_id: string;
+  charge_id: string | null;
+};
+
 type Product = {
   id: string;
   name: string;
@@ -31,10 +43,6 @@ type Payment = {
   paid_at: string;
   method: string;
 };
-
-const monthFormatter = new Intl.DateTimeFormat("pt-PT", {
-  month: "long",
-});
 
 function statusBadge(status: Charge["status"], isPaidByPayment: boolean) {
   if (status === "paid" || isPaidByPayment) {
@@ -74,9 +82,6 @@ export default async function Home({ searchParams }: PageProps) {
       ? rawYear
       : today.getFullYear();
 
-  const months = Array.from({ length: 12 }, (_, i) => i + 1);
-  const years = Array.from({ length: 3 }, (_, i) => today.getFullYear() - 1 + i);
-
   const supabase = await createClient();
   const {
     data: { user },
@@ -94,7 +99,7 @@ export default async function Home({ searchParams }: PageProps) {
 
   const isAdmin = profile?.role === "admin";
 
-  const { data: charges, error: chargesError } = await supabase
+  const { data: monthlyCharges, error: monthlyChargesError } = await supabase
     .from("charges")
     .select("id, product_id, amount, status, due_date, billing_month, billing_year")
     .eq("athlete_user_id", user.id)
@@ -102,6 +107,45 @@ export default async function Home({ searchParams }: PageProps) {
     .eq("billing_year", selectedYear)
     .order("due_date", { ascending: true })
     .returns<Charge[]>();
+
+  const periodStart = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`;
+  const periodEndDate = new Date(selectedYear, selectedMonth, 0);
+  const periodEnd = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(periodEndDate.getDate()).padStart(2, "0")}`;
+
+  const { data: periodEvents } = await supabase
+    .from("events")
+    .select("id, title, event_date")
+    .gte("event_date", periodStart)
+    .lte("event_date", periodEnd)
+    .returns<Event[]>();
+
+  const periodEventIds = [...new Set((periodEvents ?? []).map((event) => event.id))];
+
+  const { data: periodRegistrations } = periodEventIds.length
+    ? await supabase
+        .from("event_registrations")
+        .select("event_id, charge_id")
+        .eq("athlete_user_id", user.id)
+        .in("event_id", periodEventIds)
+        .in("status", ["requested", "confirmed"])
+        .returns<EventRegistration[]>()
+    : { data: [] as EventRegistration[] };
+
+  const periodEventChargeIds = [
+    ...new Set(
+      (periodRegistrations ?? [])
+        .map((registration) => registration.charge_id)
+        .filter((chargeId): chargeId is string => Boolean(chargeId)),
+    ),
+  ];
+
+  const { data: periodEventCharges } = periodEventChargeIds.length
+    ? await supabase
+        .from("charges")
+        .select("id, product_id, amount, status, due_date, billing_month, billing_year")
+        .in("id", periodEventChargeIds)
+        .returns<Charge[]>()
+    : { data: [] as Charge[] };
 
   const { data: outstandingCharges, error: outstandingChargesError } = await supabase
     .from("charges")
@@ -112,7 +156,8 @@ export default async function Home({ searchParams }: PageProps) {
     .order("billing_month", { ascending: true })
     .returns<Charge[]>();
 
-  const combinedCharges = [...(charges ?? []), ...(outstandingCharges ?? [])];
+  const chargesInPeriod = [...(monthlyCharges ?? []), ...(periodEventCharges ?? [])];
+  const combinedCharges = [...chargesInPeriod, ...(outstandingCharges ?? [])];
   const productIds = [...new Set(combinedCharges.map((c) => c.product_id))];
   const chargeIds = [...new Set(combinedCharges.map((c) => c.id))];
 
@@ -133,8 +178,31 @@ export default async function Home({ searchParams }: PageProps) {
         .returns<Payment[]>()
     : { data: [] as Payment[] };
 
+  const { data: registrationsByCharge } = chargeIds.length
+    ? await supabase
+        .from("event_registrations")
+        .select("event_id, charge_id")
+        .eq("athlete_user_id", user.id)
+        .in("charge_id", chargeIds)
+        .returns<EventRegistration[]>()
+    : { data: [] as EventRegistration[] };
+
+  const relatedEventIds = [
+    ...new Set((registrationsByCharge ?? []).map((registration) => registration.event_id)),
+  ];
+
+  const { data: relatedEvents } = relatedEventIds.length
+    ? await supabase
+        .from("events")
+        .select("id, title, event_date")
+        .in("id", relatedEventIds)
+        .returns<Event[]>()
+    : { data: [] as Event[] };
+
   const productsById = new Map((products ?? []).map((p) => [p.id, p]));
   const paymentsByChargeId = new Map<string, Payment[]>();
+  const eventsById = new Map((relatedEvents ?? []).map((event) => [event.id, event]));
+  const eventByChargeId = new Map<string, Event>();
 
   for (const payment of payments ?? []) {
     const list = paymentsByChargeId.get(payment.charge_id) ?? [];
@@ -142,19 +210,31 @@ export default async function Home({ searchParams }: PageProps) {
     paymentsByChargeId.set(payment.charge_id, list);
   }
 
-  const outstandingMonthlyCharges = (outstandingCharges ?? []).filter((charge) => {
-    const product = productsById.get(charge.product_id);
+  for (const registration of registrationsByCharge ?? []) {
+    if (!registration.charge_id) {
+      continue;
+    }
+
+    const event = eventsById.get(registration.event_id);
+    if (!event) {
+      continue;
+    }
+
+    eventByChargeId.set(registration.charge_id, event);
+  }
+
+  const outstandingOpenCharges = (outstandingCharges ?? []).filter((charge) => {
     const chargePayments = paymentsByChargeId.get(charge.id) ?? [];
     const paid = charge.status === "paid" || chargePayments.length > 0;
-    return (product?.type ?? "monthly_fee") === "monthly_fee" && !paid;
+    return !paid;
   });
 
-  const paidThisMonth = (charges ?? []).filter((charge) => {
+  const paidThisMonth = chargesInPeriod.filter((charge) => {
     const chargePayments = paymentsByChargeId.get(charge.id) ?? [];
     return charge.status === "paid" || chargePayments.length > 0;
   }).length;
 
-  const pendingThisMonth = Math.max((charges?.length ?? 0) - paidThisMonth, 0);
+  const pendingThisMonth = Math.max(chargesInPeriod.length - paidThisMonth, 0);
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-6xl px-5 py-8 md:px-8 md:py-10">
@@ -165,8 +245,11 @@ export default async function Home({ searchParams }: PageProps) {
             <h1 className="section-title text-foreground">Mensalidades</h1>
             <p className="muted max-w-2xl">Seleciona o mes para veres o estado dos teus pagamentos e regularizares os valores em atraso.</p>
             <p className="text-sm text-zinc-600">Sessao: {user.email}</p>
+            <Link href="/conta" scroll={false} className="w-fit text-sm font-semibold text-brand underline decoration-2 underline-offset-4 hover:text-brand-2">
+              Seguranca da conta
+            </Link>
             {isAdmin ? (
-              <Link href="/admin" className="w-fit text-sm font-semibold text-brand underline decoration-2 underline-offset-4 hover:text-brand-2">
+              <Link href="/admin" scroll={false} className="w-fit text-sm font-semibold text-brand underline decoration-2 underline-offset-4 hover:text-brand-2">
                 Ir para painel admin
               </Link>
             ) : null}
@@ -196,61 +279,25 @@ export default async function Home({ searchParams }: PageProps) {
       </header>
 
       <section className="surface-card mb-8 rounded-2xl p-4 md:p-5">
-        <form className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
-          <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
-            Mes
-            <select
-              name="month"
-              defaultValue={selectedMonth}
-              className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
-            >
-              {months.map((month) => {
-                const monthName = monthFormatter.format(new Date(2026, month - 1, 1));
-                return (
-                  <option key={month} value={month}>
-                    {monthName.charAt(0).toUpperCase() + monthName.slice(1)}
-                  </option>
-                );
-              })}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
-            Ano
-            <select
-              name="year"
-              defaultValue={selectedYear}
-              className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
-            >
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <button type="submit" className="btn-primary h-10 rounded-lg px-5 font-semibold">
-            Ver estado
-          </button>
-        </form>
+        <AthletePeriodFilterForm selectedMonth={selectedMonth} selectedYear={selectedYear} />
       </section>
 
       <section className="space-y-4">
-        {chargesError ? (
+        {monthlyChargesError ? (
           <div className="surface-card rounded-xl border border-danger/20 bg-red-50 p-4 text-danger">
-            Nao foi possivel carregar as cobrancas deste mes.
+            Nao foi possivel carregar os pagamentos deste periodo.
           </div>
         ) : null}
 
-        {!chargesError && (charges?.length ?? 0) === 0 ? (
+        {!monthlyChargesError && chargesInPeriod.length === 0 ? (
           <div className="surface-card rounded-xl p-6 text-zinc-700">
-            Nao existem cobrancas para {selectedMonth}/{selectedYear}.
+            Nao existem mensalidades ou eventos para {selectedMonth}/{selectedYear}.
           </div>
         ) : null}
 
-        {(charges ?? []).map((charge) => {
+        {chargesInPeriod.map((charge) => {
           const product = productsById.get(charge.product_id);
+          const event = eventByChargeId.get(charge.id);
           const chargePayments = paymentsByChargeId.get(charge.id) ?? [];
           const latestPayment = chargePayments[0];
           const paid = charge.status === "paid" || chargePayments.length > 0;
@@ -279,9 +326,15 @@ export default async function Home({ searchParams }: PageProps) {
                   <strong>Vencimento:</strong> {charge.due_date ?? "-"}
                 </p>
                 <p>
-                  <strong>Tipo:</strong> {product?.type ?? "monthly_fee"}
+                  <strong>Tipo:</strong> {product?.type === "event_registration" ? "Evento" : "Mensalidade"}
                 </p>
               </div>
+
+              {event ? (
+                <p className="mt-2 text-sm text-zinc-700">
+                  <strong>Evento:</strong> {event.title} ({new Date(event.event_date).toLocaleDateString("pt-PT")})
+                </p>
+              ) : null}
 
               {latestPayment ? (
                 <p className="mt-3 text-sm text-emerald-700">
@@ -290,13 +343,15 @@ export default async function Home({ searchParams }: PageProps) {
               ) : null}
 
               <div className="mt-4">
-                <button
-                  type="button"
-                  disabled={paid}
-                  className="btn-primary h-10 rounded-lg px-4 font-semibold disabled:cursor-not-allowed disabled:border-zinc-300 disabled:bg-zinc-300 disabled:text-zinc-600"
-                >
-                  {paid ? "Ja pago" : "Pagar mensalidade"}
-                </button>
+                {!paid ? (
+                  <Link
+                    href={`/pagamento/${charge.id}`}
+                    scroll={false}
+                    className="btn-primary inline-flex h-10 items-center rounded-lg px-4 font-semibold"
+                  >
+                    {event ? "Pagar inscricao" : "Pagar mensalidade"}
+                  </Link>
+                ) : null}
               </div>
             </article>
           );
@@ -305,24 +360,25 @@ export default async function Home({ searchParams }: PageProps) {
 
       <section className="mt-10 space-y-4">
         <div className="mb-2">
-          <h2 className="section-title text-foreground">Mensalidades por pagar</h2>
-          <p className="muted">Lista de mensalidades pendentes de pagamento.</p>
+          <h2 className="section-title text-foreground">Tudo por pagar</h2>
+          <p className="muted">Lista de pendentes e atrasados, incluindo mensalidades e eventos.</p>
         </div>
 
         {outstandingChargesError ? (
           <div className="surface-card rounded-xl border border-danger/20 bg-red-50 p-4 text-danger">
-            Nao foi possivel carregar as mensalidades por pagar.
+            Nao foi possivel carregar os pagamentos por regularizar.
           </div>
         ) : null}
 
-        {!outstandingChargesError && outstandingMonthlyCharges.length === 0 ? (
+        {!outstandingChargesError && outstandingOpenCharges.length === 0 ? (
           <div className="surface-card rounded-xl border border-ok/20 bg-emerald-50 p-6 text-ok">
-            Nao tens mensalidades em atraso ou pendentes.
+            Nao tens pagamentos em atraso ou pendentes.
           </div>
         ) : null}
 
-        {outstandingMonthlyCharges.map((charge) => {
+        {outstandingOpenCharges.map((charge) => {
           const product = productsById.get(charge.product_id);
+          const event = eventByChargeId.get(charge.id);
 
           return (
             <article key={`outstanding-${charge.id}`} className="surface-card rounded-2xl p-5 md:p-6">
@@ -343,17 +399,24 @@ export default async function Home({ searchParams }: PageProps) {
                   <strong>Vencimento:</strong> {charge.due_date ?? "-"}
                 </p>
                 <p>
-                  <strong>Periodo:</strong> {charge.billing_month ?? "-"}/{charge.billing_year ?? "-"}
+                  <strong>Referencia:</strong> {event ? event.title : `${charge.billing_month ?? "-"}/${charge.billing_year ?? "-"}`}
                 </p>
               </div>
 
+              {event ? (
+                <p className="mt-2 text-sm text-zinc-700">
+                  <strong>Evento:</strong> {new Date(event.event_date).toLocaleDateString("pt-PT")}
+                </p>
+              ) : null}
+
               <div className="mt-4">
-                <button
-                  type="button"
-                  className="btn-primary h-10 rounded-lg px-4 font-semibold"
+                <Link
+                  href={`/pagamento/${charge.id}`}
+                  scroll={false}
+                  className="btn-primary inline-flex h-10 items-center rounded-lg px-4 font-semibold"
                 >
-                  Pagar mensalidade
-                </button>
+                  {event ? "Pagar inscricao" : "Pagar mensalidade"}
+                </Link>
               </div>
             </article>
           );
