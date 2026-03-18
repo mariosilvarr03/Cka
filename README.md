@@ -1,5 +1,33 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Payments (Easypay)
+
+This project supports two payment provider modes:
+
+- `mock` (default): local simulated responses
+- `real`: Easypay API (`/single` + webhook verification)
+
+Set these environment variables in `.env.local`:
+
+```bash
+PAYMENTS_PROVIDER_MODE=real
+PAYMENTS_PROVIDER_BASE_URL=https://api.test.easypay.pt/2.0
+PAYMENTS_PROVIDER_ACCOUNT_ID=<your_account_id>
+PAYMENTS_PROVIDER_API_KEY=<your_api_key>
+
+# Optional extra protection for webhook endpoint (custom shared secret)
+PAYMENTS_WEBHOOK_SECRET=<optional_custom_secret>
+
+# Optional signature verification for providers that sign payload body
+PAYMENTS_WEBHOOK_SIGNATURE_SECRET=<optional_signature_secret>
+```
+
+Notes:
+
+- When `PAYMENTS_PROVIDER_MODE=real`, create-intent calls Easypay `POST /single` with `Idempotency-Key`.
+- The webhook endpoint accepts Easypay notification payloads and validates status by calling Easypay `GET /single/{id}`.
+- If `PAYMENTS_WEBHOOK_SECRET` is configured, incoming webhook requests must include `x-webhook-secret` with the same value.
+
 ## Getting Started
 
 First, run the development server:

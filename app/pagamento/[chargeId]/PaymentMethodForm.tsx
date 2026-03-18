@@ -1,8 +1,41 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type PaymentMethod = "mbway" | "multibanco";
+
+type MbwayInstructions = {
+  phone: string;
+  message: string;
+};
+
+type MultibancoInstructions = {
+  entity: string;
+  reference: string;
+  amount: number;
+  message: string;
+};
+
+type IntentResponse = {
+  intent: {
+    id: string;
+    status: string;
+    expires_at: string | null;
+  };
+  method: PaymentMethod;
+  instructions: MbwayInstructions | MultibancoInstructions;
+};
+
+type IntentStatusResponse = {
+  intent: {
+    id: string;
+    status: "created" | "pending" | "paid" | "failed" | "expired" | "cancelled";
+    expires_at: string | null;
+    paid_at: string | null;
+    last_error: string | null;
+  };
+};
 
 type PaymentMethodFormProps = {
   chargeId: string;
@@ -10,14 +43,117 @@ type PaymentMethodFormProps = {
 };
 
 export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFormProps) {
+  const router = useRouter();
   const [method, setMethod] = useState<PaymentMethod>("mbway");
-  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [intentResult, setIntentResult] = useState<IntentResponse | null>(null);
+  const [intentStatus, setIntentStatus] = useState<IntentStatusResponse["intent"]["status"] | null>(null);
+  const [intentPaidAt, setIntentPaidAt] = useState<string | null>(null);
+  const [intentLastError, setIntentLastError] = useState<string | null>(null);
+  const paymentRefreshTriggered = useRef(false);
 
   const formattedAmount = useMemo(() => `${amount.toFixed(2)} EUR`, [amount]);
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    const intentId = intentResult?.intent.id;
+
+    if (!intentId || (intentStatus !== "created" && intentStatus !== "pending")) {
+      return;
+    }
+
+    const intervalId = window.setInterval(async () => {
+      const response = await fetch(`/api/payments/intent-status?intentId=${intentId}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const statusData = (await response.json()) as IntentStatusResponse;
+      setIntentStatus(statusData.intent.status);
+      setIntentPaidAt(statusData.intent.paid_at);
+      setIntentLastError(statusData.intent.last_error);
+
+      if (statusData.intent.status === "paid" && !paymentRefreshTriggered.current) {
+        paymentRefreshTriggered.current = true;
+        router.refresh();
+      }
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [intentResult?.intent.id, intentStatus, router]);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitted(true);
+
+    setError(null);
+    setIntentResult(null);
+    setLoading(true);
+
+    const formData = new FormData(event.currentTarget);
+
+    const payload: {
+      chargeId: string;
+      method: PaymentMethod;
+      mbwayPhone?: string;
+      receiptEmail?: string;
+      nif?: string;
+    } = {
+      chargeId,
+      method,
+    };
+
+    if (method === "mbway") {
+      payload.mbwayPhone = String(formData.get("mbway_phone") ?? "").trim();
+    } else {
+      payload.receiptEmail = String(formData.get("multibanco_email") ?? "").trim();
+      const nif = String(formData.get("multibanco_nif") ?? "").trim();
+      if (nif) {
+        payload.nif = nif;
+      }
+    }
+
+    const response = await fetch("/api/payments/create-intent", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = (await response.json()) as IntentResponse | { error?: string };
+    setLoading(false);
+
+    if (!response.ok) {
+      setError(("error" in data && data.error) || "Falha ao iniciar pagamento.");
+      return;
+    }
+
+    const successData = data as IntentResponse;
+    setIntentResult(successData);
+    setIntentStatus((successData.intent.status as IntentStatusResponse["intent"]["status"]) ?? "pending");
+    setIntentPaidAt(null);
+    setIntentLastError(null);
+    paymentRefreshTriggered.current = false;
+  }
+
+  function statusLabel(status: IntentStatusResponse["intent"]["status"]) {
+    switch (status) {
+      case "created":
+      case "pending":
+        return { text: "Pendente", className: "bg-amber-100 text-amber-800" };
+      case "paid":
+        return { text: "Pago", className: "bg-emerald-100 text-emerald-800" };
+      case "expired":
+        return { text: "Expirado", className: "bg-zinc-200 text-zinc-700" };
+      case "failed":
+        return { text: "Falhado", className: "bg-red-100 text-red-700" };
+      case "cancelled":
+        return { text: "Cancelado", className: "bg-zinc-200 text-zinc-700" };
+    }
   }
 
   return (
@@ -120,13 +256,82 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
         </p>
       </div>
 
-      <button type="submit" className="btn-primary h-10 rounded-lg px-5 font-semibold">
-        Continuar para pagamento
+      <button
+        type="submit"
+        disabled={loading}
+        className="btn-primary h-10 rounded-lg px-5 font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {loading ? "A iniciar..." : "Continuar para pagamento"}
       </button>
 
-      {submitted ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          Formulario validado. No proximo passo vamos ligar este envio ao provider real de pagamentos.
+      {error ? (
+        <div className="rounded-lg border border-danger/20 bg-red-50 p-3 text-sm text-danger">
+          {error}
+        </div>
+      ) : null}
+
+      {intentResult && intentStatus ? (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="font-semibold text-zinc-700">Estado da intencao:</span>
+          <span className={`badge ${statusLabel(intentStatus).className}`}>{statusLabel(intentStatus).text}</span>
+        </div>
+      ) : null}
+
+      {intentResult && intentResult.method === "mbway" ? (
+        <div className="rounded-lg border border-ok/20 bg-emerald-50 p-4 text-sm text-emerald-800">
+          <p className="font-semibold">Pagamento MB Way iniciado</p>
+          <p className="mt-1">{(intentResult.instructions as MbwayInstructions).message}</p>
+          <p className="mt-1">
+            <strong>Telemovel:</strong> {(intentResult.instructions as MbwayInstructions).phone}
+          </p>
+          <p className="mt-1">
+            <strong>Validade:</strong>{" "}
+            {intentResult.intent.expires_at
+              ? new Date(intentResult.intent.expires_at).toLocaleString("pt-PT")
+              : "-"}
+          </p>
+          {intentPaidAt ? (
+            <p className="mt-1">
+              <strong>Pago em:</strong> {new Date(intentPaidAt).toLocaleString("pt-PT")}
+            </p>
+          ) : null}
+          {intentLastError ? (
+            <p className="mt-1 text-red-700">
+              <strong>Detalhe:</strong> {intentLastError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {intentResult && intentResult.method === "multibanco" ? (
+        <div className="rounded-lg border border-ok/20 bg-emerald-50 p-4 text-sm text-emerald-800">
+          <p className="font-semibold">Referencia Multibanco gerada</p>
+          <p className="mt-1">{(intentResult.instructions as MultibancoInstructions).message}</p>
+          <p className="mt-1">
+            <strong>Entidade:</strong> {(intentResult.instructions as MultibancoInstructions).entity}
+          </p>
+          <p className="mt-1">
+            <strong>Referencia:</strong> {(intentResult.instructions as MultibancoInstructions).reference}
+          </p>
+          <p className="mt-1">
+            <strong>Valor:</strong> {(intentResult.instructions as MultibancoInstructions).amount.toFixed(2)} EUR
+          </p>
+          <p className="mt-1">
+            <strong>Validade:</strong>{" "}
+            {intentResult.intent.expires_at
+              ? new Date(intentResult.intent.expires_at).toLocaleString("pt-PT")
+              : "-"}
+          </p>
+          {intentPaidAt ? (
+            <p className="mt-1">
+              <strong>Pago em:</strong> {new Date(intentPaidAt).toLocaleString("pt-PT")}
+            </p>
+          ) : null}
+          {intentLastError ? (
+            <p className="mt-1 text-red-700">
+              <strong>Detalhe:</strong> {intentLastError}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </form>
