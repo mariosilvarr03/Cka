@@ -12,7 +12,7 @@ type ExportIntentsButtonProps = {
     status: string;
     due_date: string | null;
   }>;
-  paymentStatus: string;
+  paymentStatus: "all" | "created" | "pending" | "paid" | "failed" | "expired" | "cancelled";
 };
 
 export default function AdminExportIntentsButton({ rows, paymentStatus }: ExportIntentsButtonProps) {
@@ -51,3 +51,4 @@ export default function AdminExportIntentsButton({ rows, paymentStatus }: Export
     </button>
   );
 }
+

@@ -14,7 +14,7 @@ export default function AdminChargesFilterAndExport({
   selectedMonth: number;
   selectedYear: number;
   searchQuery: string;
-  paymentStatus: string;
+  paymentStatus: "all" | "created" | "pending" | "paid" | "failed" | "expired" | "cancelled";
   selectedEventId: string;
   events: Array<{ id: string; title: string }>;
   exportRows: Array<{
@@ -41,3 +41,4 @@ export default function AdminChargesFilterAndExport({
     </div>
   );
 }
+
