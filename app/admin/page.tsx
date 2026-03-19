@@ -478,8 +478,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       const rawAmount = String(formData.get(`amount_${athleteId}`) ?? "0").trim();
       const amount = Number(rawAmount);
 
-      if (!Number.isFinite(amount) || amount < 0) {
-        redirect("/admin?eventError=Existem+valores+invalidos+na+lista+de+atletas");
+      if (!Number.isFinite(amount) || amount <= 0) {
+        redirect("/admin?eventError=Cada+atleta+inscrito+tem+de+ter+um+valor+de+inscricao+superior+a+0");
       }
 
       registrations.push({
@@ -888,60 +888,64 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <article className="rounded-xl border border-line/80 bg-white/70 p-4">
-            <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.16em] text-zinc-700">
+          <details className="rounded-xl border border-line/80 bg-white/70 p-4">
+            <summary className="cursor-pointer list-none text-sm font-semibold uppercase tracking-[0.16em] text-zinc-700 [&::-webkit-details-marker]:hidden">
               Intents pendentes antigas
-            </h3>
-            {!staleIntents || staleIntents.length === 0 ? (
-              <p className="text-sm text-zinc-600">Sem alertas. Nao existem intents pendentes com mais de 30 minutos.</p>
-            ) : (
-              <ul className="space-y-2">
-                {staleIntents.map((intent) => (
-                  <li key={intent.id} className="rounded-lg border border-line/70 bg-white p-3 text-sm text-zinc-700">
-                    <p className="font-semibold text-zinc-900">
-                      Charge {intent.charge_id} · {Number(intent.amount).toFixed(2)} EUR
-                    </p>
-                    <p>
-                      Estado: {intent.status} · Metodo: {intent.method} · Provider: {intent.provider}
-                    </p>
-                    <p>Criada em: {new Date(intent.created_at).toLocaleString("pt-PT")}</p>
-                    {intent.external_request_id ? <p>Request: {intent.external_request_id}</p> : null}
-                    {intent.last_error ? <p className="text-danger">Erro: {intent.last_error}</p> : null}
-                    {intent.provider === "easypay" && intent.external_request_id ? (
-                      <form action={reprocessIntent} className="mt-2">
-                        <input type="hidden" name="intent_id" value={intent.id} />
-                        <button type="submit" className="btn-ghost h-9 rounded-lg px-3 text-xs font-semibold uppercase tracking-[0.14em]">
-                          Reprocessar
-                        </button>
-                      </form>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </article>
+            </summary>
+            <div className="mt-3">
+              {!staleIntents || staleIntents.length === 0 ? (
+                <p className="text-sm text-zinc-600">Sem alertas. Nao existem intents pendentes com mais de 30 minutos.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {staleIntents.map((intent) => (
+                    <li key={intent.id} className="rounded-lg border border-line/70 bg-white p-3 text-sm text-zinc-700">
+                      <p className="font-semibold text-zinc-900">
+                        Charge {intent.charge_id} · {Number(intent.amount).toFixed(2)} EUR
+                      </p>
+                      <p>
+                        Estado: {intent.status} · Metodo: {intent.method} · Provider: {intent.provider}
+                      </p>
+                      <p>Criada em: {new Date(intent.created_at).toLocaleString("pt-PT")}</p>
+                      {intent.external_request_id ? <p>Request: {intent.external_request_id}</p> : null}
+                      {intent.last_error ? <p className="text-danger">Erro: {intent.last_error}</p> : null}
+                      {intent.provider === "easypay" && intent.external_request_id ? (
+                        <form action={reprocessIntent} className="mt-2">
+                          <input type="hidden" name="intent_id" value={intent.id} />
+                          <button type="submit" className="btn-ghost h-9 rounded-lg px-3 text-xs font-semibold uppercase tracking-[0.14em]">
+                            Reprocessar
+                          </button>
+                        </form>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </details>
 
-          <article className="rounded-xl border border-line/80 bg-white/70 p-4">
-            <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.16em] text-zinc-700">
+          <details className="rounded-xl border border-line/80 bg-white/70 p-4">
+            <summary className="cursor-pointer list-none text-sm font-semibold uppercase tracking-[0.16em] text-zinc-700 [&::-webkit-details-marker]:hidden">
               Ultimos erros de webhook
-            </h3>
-            {!webhookErrors || webhookErrors.length === 0 ? (
-              <p className="text-sm text-zinc-600">Sem erros recentes de webhook.</p>
-            ) : (
-              <ul className="space-y-2">
-                {webhookErrors.map((event) => (
-                  <li key={event.id} className="rounded-lg border border-line/70 bg-white p-3 text-sm text-zinc-700">
-                    <p className="font-semibold text-zinc-900">
-                      {event.provider} · {event.event_type ?? "evento"}
-                    </p>
-                    <p>Evento: {event.external_event_id}</p>
-                    <p>Recebido: {new Date(event.received_at).toLocaleString("pt-PT")}</p>
-                    <p className="text-danger">Erro: {event.processing_error}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </article>
+            </summary>
+            <div className="mt-3">
+              {!webhookErrors || webhookErrors.length === 0 ? (
+                <p className="text-sm text-zinc-600">Sem erros recentes de webhook.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {webhookErrors.map((event) => (
+                    <li key={event.id} className="rounded-lg border border-line/70 bg-white p-3 text-sm text-zinc-700">
+                      <p className="font-semibold text-zinc-900">
+                        {event.provider} · {event.event_type ?? "evento"}
+                      </p>
+                      <p>Evento: {event.external_event_id}</p>
+                      <p>Recebido: {new Date(event.received_at).toLocaleString("pt-PT")}</p>
+                      <p className="text-danger">Erro: {event.processing_error}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </details>
         </div>
 
         {params.reprocessOk ? (
@@ -1100,8 +1104,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       <input
                         type="number"
                         step="0.01"
-                        min="0"
-                        defaultValue="0"
+                        min="0.01"
+                        placeholder="Ex: 12.50"
                         name={`amount_${athlete.user_id}`}
                         className="h-10 w-28 rounded-lg border border-line bg-white px-3 text-zinc-900"
                       />
@@ -1272,6 +1276,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     </main>
   );
 }
+
+
 
 
 
