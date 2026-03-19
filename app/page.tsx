@@ -246,7 +246,7 @@ export default async function Home({ searchParams }: PageProps) {
             <p className="muted max-w-2xl">Seleciona o mes para veres o estado dos teus pagamentos e regularizares os valores em atraso.</p>
             <p className="text-sm text-zinc-600">Sessao: {user.email}</p>
             <Link href="/conta" scroll={false} className="w-fit text-sm font-semibold text-brand underline decoration-2 underline-offset-4 hover:text-brand-2">
-              Seguranca da conta
+              Mudar Password
             </Link>
             {isAdmin ? (
               <Link href="/admin" scroll={false} className="w-fit text-sm font-semibold text-brand underline decoration-2 underline-offset-4 hover:text-brand-2">
