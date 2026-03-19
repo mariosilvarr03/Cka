@@ -590,7 +590,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       : today.getFullYear();
   const searchQuery = String(params.q ?? "").trim().toLowerCase();
   const validStatuses = ["created", "pending", "paid", "failed", "expired", "cancelled"];
-  const paymentStatus = validStatuses.includes(params.paymentStatus) ? params.paymentStatus : "all";
+  const rawPaymentStatus = String(params.paymentStatus ?? "");
+  const paymentStatus = validStatuses.includes(rawPaymentStatus) ? rawPaymentStatus : "all";
   const selectedEventId = String(params.eventId ?? "all");
   const athleteNameFilter = String(params.athleteName ?? "").trim().toLowerCase();
   const isGlobalSearch = searchQuery.length > 0 || selectedEventId !== "all";
@@ -1271,6 +1272,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     </main>
   );
 }
+
+
 
 
 
