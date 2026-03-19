@@ -19,6 +19,12 @@ type ChargeRow = {
   currency: string;
 };
 
+type OpenIntentRow = {
+  id: string;
+  status: "created" | "pending";
+  expires_at: string | null;
+};
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CreateIntentBody;
@@ -66,6 +72,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Cobranca ja paga" }, { status: 409 });
     }
 
+    const adminClient = createAdminClient();
+    const { data: openIntent } = await adminClient
+      .from("payment_intents")
+      .select("id, status, expires_at")
+      .eq("charge_id", charge.id)
+      .eq("athlete_user_id", user.id)
+      .in("status", ["created", "pending"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<OpenIntentRow>();
+
+    const openIntentExpiresAtMs = openIntent?.expires_at ? new Date(openIntent.expires_at).getTime() : null;
+    const openIntentIsExpired = openIntentExpiresAtMs !== null && openIntentExpiresAtMs < Date.now();
+
+    if (openIntent && !openIntentIsExpired) {
+      return NextResponse.json(
+        { error: "Ja existe uma tentativa de pagamento em curso para esta cobranca" },
+        { status: 409 },
+      );
+    }
+
+    if (openIntent && openIntentIsExpired) {
+      await adminClient
+        .from("payment_intents")
+        .update({
+          status: "expired",
+          last_error: "Intent expirada automaticamente antes de nova tentativa",
+        })
+        .eq("id", openIntent.id);
+    }
+
     const providerIntent = await createPaymentIntent({
       chargeId: charge.id,
       amount: Number(charge.amount),
@@ -76,7 +113,6 @@ export async function POST(request: Request) {
       nif: body.nif,
     });
 
-    const adminClient = createAdminClient();
     const { data: insertedIntent, error: insertError } = await adminClient
       .from("payment_intents")
       .insert({
@@ -99,6 +135,13 @@ export async function POST(request: Request) {
       })
       .select("id, status, expires_at, external_request_id, external_reference, external_entity")
       .single();
+
+    if (insertError?.code === "23505") {
+      return NextResponse.json(
+        { error: "Ja existe uma tentativa de pagamento em curso para esta cobranca" },
+        { status: 409 },
+      );
+    }
 
     if (insertError || !insertedIntent) {
       return NextResponse.json({ error: "Falha ao criar intencao de pagamento" }, { status: 500 });

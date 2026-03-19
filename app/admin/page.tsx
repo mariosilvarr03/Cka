@@ -3,8 +3,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import AdminChargesFilterForm from "@/app/components/AdminChargesFilterForm";
 import AdminAthleteNameFilterForm from "@/app/components/AdminAthleteNameFilterForm";
+import AdminChargesFilterAndExport from "@/app/components/AdminChargesFilterAndExport.client";
 
 type AdminPageProps = {
   searchParams: Promise<{
@@ -20,6 +20,8 @@ type AdminPageProps = {
     eventError?: string;
     accountOk?: string;
     accountError?: string;
+    reprocessOk?: string;
+    reprocessError?: string;
   }>;
 };
 
@@ -67,6 +69,101 @@ type Payment = {
   method: string;
 };
 
+type AdminPaymentStatus = "created" | "pending" | "paid" | "failed" | "expired" | "cancelled";
+
+type PaymentIntentListItem = {
+  charge_id: string;
+  status: AdminPaymentStatus;
+  created_at: string;
+};
+
+type PaymentIntentMonitor = {
+  id: string;
+  charge_id: string;
+  provider: string;
+  method: string;
+  amount: number;
+  status: "created" | "pending" | "paid" | "failed" | "expired" | "cancelled";
+  external_request_id: string | null;
+  last_error: string | null;
+  created_at: string;
+};
+
+type PaymentWebhookEventMonitor = {
+  id: number;
+  provider: string;
+  external_event_id: string;
+  event_type: string | null;
+  received_at: string;
+  processed_at: string | null;
+  processing_error: string | null;
+};
+
+type EasypayVerification = {
+  status: string;
+  type: string;
+  key: string;
+  date: string;
+  value: number;
+  entity: string;
+  reference: string;
+};
+
+function getString(data: Record<string, unknown>, key: string) {
+  const value = data[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getNumber(data: Record<string, unknown>, key: string) {
+  const value = data[key];
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : NaN;
+  }
+  return NaN;
+}
+
+function mapEasypayStatus(status: string, eventType: string) {
+  const normalizedStatus = status.toLowerCase();
+  const normalizedEvent = eventType.toLowerCase();
+
+  if (normalizedStatus === "paid") {
+    return "paid" as const;
+  }
+  if (normalizedStatus === "success") {
+    if (
+      normalizedEvent.includes("capture") ||
+      normalizedEvent.includes("transaction") ||
+      normalizedEvent.includes("sale") ||
+      normalizedEvent.includes("paid")
+    ) {
+      return "paid" as const;
+    }
+    return "pending" as const;
+  }
+  if (["pending", "created", "authorised", "authorized", "enrolled"].includes(normalizedStatus)) {
+    return "pending" as const;
+  }
+  if (["failed", "error", "declined"].includes(normalizedStatus)) {
+    return "failed" as const;
+  }
+  if (normalizedStatus === "expired") {
+    return "expired" as const;
+  }
+  if (["cancelled", "canceled", "deleted", "voided"].includes(normalizedStatus)) {
+    return "cancelled" as const;
+  }
+
+  return null;
+}
+
+function amountsMatch(left: number, right: number) {
+  return Math.abs(left - right) < 0.005;
+}
+
 const monthFormatter = new Intl.DateTimeFormat("pt-PT", {
   month: "long",
 });
@@ -77,6 +174,197 @@ function formatMonthYear(month: number, year: number) {
 }
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
+  async function reprocessIntent(formData: FormData) {
+    "use server";
+
+    const intentId = String(formData.get("intent_id") ?? "").trim();
+
+    if (!intentId) {
+      redirect("/admin?reprocessError=Intent+invalida");
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      redirect("/login");
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (profile?.role !== "admin") {
+      redirect("/");
+    }
+
+    const accountId = process.env.PAYMENTS_PROVIDER_ACCOUNT_ID;
+    const apiKey = process.env.PAYMENTS_PROVIDER_API_KEY;
+    const baseUrl = (process.env.PAYMENTS_PROVIDER_BASE_URL ?? "https://api.test.easypay.pt/2.0").replace(/\/+$/, "");
+
+    if (!accountId || !apiKey) {
+      redirect("/admin?reprocessError=Credenciais+Easypay+em+falta");
+    }
+
+    const adminClient = createAdminClient();
+    const { data: intent } = await adminClient
+      .from("payment_intents")
+      .select("id, charge_id, provider, method, amount, status, external_request_id")
+      .eq("id", intentId)
+      .maybeSingle<{
+        id: string;
+        charge_id: string;
+        provider: string;
+        method: "online_card" | "mbway" | "multibanco" | "cash" | "bank_transfer" | "other";
+        amount: number;
+        status: "created" | "pending" | "paid" | "failed" | "expired" | "cancelled";
+        external_request_id: string | null;
+      }>();
+
+    if (!intent) {
+      redirect("/admin?reprocessError=Intent+nao+encontrada");
+    }
+
+    if (intent.provider !== "easypay") {
+      redirect("/admin?reprocessError=Reprocessamento+manual+disponivel+apenas+para+Easypay");
+    }
+
+    if (!intent.external_request_id) {
+      redirect("/admin?reprocessError=Intent+sem+external_request_id");
+    }
+
+    if (intent.status === "paid") {
+      redirect("/admin?reprocessOk=Intent+ja+estava+paga");
+    }
+
+    let verification: EasypayVerification;
+
+    try {
+      const response = await fetch(`${baseUrl}/single/${intent.external_request_id}`, {
+        method: "GET",
+        headers: {
+          AccountId: accountId,
+          ApiKey: apiKey,
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        await adminClient
+          .from("payment_intents")
+          .update({
+            last_error: `Reprocessamento manual falhou na validacao Easypay (${response.status})`,
+          })
+          .eq("id", intent.id);
+
+        redirect("/admin?reprocessError=Falha+ao+consultar+Easypay");
+      }
+
+      const data = (await response.json()) as Record<string, unknown>;
+      verification = {
+        status: getString(data, "status"),
+        type: getString(data, "type"),
+        key: getString(data, "key"),
+        date: getString(data, "date"),
+        value: getNumber(data, "value"),
+        entity: getString(data, "entity"),
+        reference: getString(data, "reference"),
+      };
+    } catch {
+      await adminClient
+        .from("payment_intents")
+        .update({
+          last_error: "Reprocessamento manual falhou por erro de rede",
+        })
+        .eq("id", intent.id);
+
+      redirect("/admin?reprocessError=Falha+de+rede+na+consulta+ao+provider");
+    }
+
+    const mappedStatus = mapEasypayStatus(verification.status, verification.type);
+
+    if (!mappedStatus) {
+      await adminClient
+        .from("payment_intents")
+        .update({
+          last_error: "Estado do provider nao reconhecido em reprocessamento manual",
+        })
+        .eq("id", intent.id);
+
+      redirect("/admin?reprocessError=Estado+nao+reconhecido+no+provider");
+    }
+
+    if (mappedStatus === "paid") {
+      const amountFromProvider = Number.isFinite(verification.value) && verification.value > 0
+        ? verification.value
+        : Number(intent.amount);
+
+      if (!amountsMatch(amountFromProvider, Number(intent.amount))) {
+        await adminClient
+          .from("payment_intents")
+          .update({
+            last_error: `Reprocessamento manual com divergencia de valor (${amountFromProvider} vs ${intent.amount})`,
+          })
+          .eq("id", intent.id);
+
+        redirect("/admin?reprocessError=Valor+divergente+entre+provider+e+cobranca");
+      }
+
+      const providerRef = verification.key || verification.reference || intent.external_request_id;
+      const paidAt = verification.date || new Date().toISOString();
+
+      const { error: rpcError } = await adminClient.rpc("confirm_external_payment", {
+        p_charge_id: intent.charge_id,
+        p_amount: Number(intent.amount),
+        p_method: intent.method,
+        p_provider: "easypay",
+        p_provider_ref: providerRef,
+        p_paid_at: paidAt,
+        p_notes: `Reprocessamento manual admin para ${intent.id}`,
+        p_payment_intent_id: intent.id,
+      });
+
+      if (rpcError) {
+        await adminClient
+          .from("payment_intents")
+          .update({
+            last_error: "Falha no confirm_external_payment em reprocessamento manual",
+          })
+          .eq("id", intent.id);
+
+        redirect("/admin?reprocessError=Falha+ao+confirmar+pagamento+externo");
+      }
+
+      revalidatePath("/admin");
+      revalidatePath("/");
+      redirect("/admin?reprocessOk=Pagamento+confirmado+por+reprocessamento+manual");
+    }
+
+    const externalReference = verification.reference || null;
+    const externalEntity = verification.entity || null;
+    const lastError = mappedStatus === "pending"
+      ? null
+      : `Reprocessamento manual: estado ${verification.status || "desconhecido"}`;
+
+    await adminClient
+      .from("payment_intents")
+      .update({
+        status: mappedStatus,
+        external_reference: externalReference,
+        external_entity: externalEntity,
+        last_error: lastError,
+      })
+      .eq("id", intent.id);
+
+    revalidatePath("/admin");
+    redirect(`/admin?reprocessOk=${encodeURIComponent(`Intent atualizada para ${mappedStatus}`)}`);
+  }
+
   async function createAthleteAccount(formData: FormData) {
     "use server";
 
@@ -301,10 +589,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       ? rawYear
       : today.getFullYear();
   const searchQuery = String(params.q ?? "").trim().toLowerCase();
-  const paymentStatus =
-    params.paymentStatus === "paid" || params.paymentStatus === "pending"
-      ? params.paymentStatus
-      : "all";
+  const validStatuses = ["created", "pending", "paid", "failed", "expired", "cancelled"];
+  const paymentStatus = validStatuses.includes(params.paymentStatus) ? params.paymentStatus : "all";
   const selectedEventId = String(params.eventId ?? "all");
   const athleteNameFilter = String(params.athleteName ?? "").trim().toLowerCase();
   const isGlobalSearch = searchQuery.length > 0 || selectedEventId !== "all";
@@ -392,6 +678,66 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     .order("name", { ascending: true })
     .returns<CategoryOption[]>();
 
+  const adminClient = createAdminClient();
+  const now = new Date();
+  const staleIntentsCutoff = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
+  const monitoringWindowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+  const { count: staleIntentCount } = await adminClient
+    .from("payment_intents")
+    .select("id", { count: "exact", head: true })
+    .in("status", ["created", "pending"])
+    .lt("created_at", staleIntentsCutoff);
+
+  const { count: failedIntent24hCount } = await adminClient
+    .from("payment_intents")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "failed")
+    .gte("updated_at", monitoringWindowStart);
+
+  const { count: paidIntent24hCount } = await adminClient
+    .from("payment_intents")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "paid")
+    .gte("updated_at", monitoringWindowStart);
+
+  const { count: webhookReceived24hCount } = await adminClient
+    .from("payment_webhook_events")
+    .select("id", { count: "exact", head: true })
+    .gte("received_at", monitoringWindowStart);
+
+  const { count: webhookError24hCount } = await adminClient
+    .from("payment_webhook_events")
+    .select("id", { count: "exact", head: true })
+    .gte("received_at", monitoringWindowStart)
+    .not("processing_error", "is", null);
+
+  const { data: staleIntents } = await adminClient
+    .from("payment_intents")
+    .select("id, charge_id, provider, method, amount, status, external_request_id, last_error, created_at")
+    .in("status", ["created", "pending"])
+    .lt("created_at", staleIntentsCutoff)
+    .order("created_at", { ascending: true })
+    .limit(8)
+    .returns<PaymentIntentMonitor[]>();
+
+  const { data: webhookErrors } = await adminClient
+    .from("payment_webhook_events")
+    .select("id, provider, external_event_id, event_type, received_at, processed_at, processing_error")
+    .not("processing_error", "is", null)
+    .order("received_at", { ascending: false })
+    .limit(8)
+    .returns<PaymentWebhookEventMonitor[]>();
+
+  const { data: paymentIntentsByCharge } = chargeIds.length
+    ? await adminClient
+        .from("payment_intents")
+        .select("charge_id, status, created_at")
+        .in("charge_id", chargeIds)
+        .order("created_at", { ascending: false })
+        .returns<PaymentIntentListItem[]>()
+    : { data: [] as PaymentIntentListItem[] };
+
   const filteredAthleteOptions = (athleteOptions ?? []).filter((athlete) => {
     if (!athleteNameFilter) {
       return true;
@@ -403,6 +749,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const athletesById = new Map((athletes ?? []).map((a) => [a.user_id, a]));
   const productsById = new Map((products ?? []).map((p) => [p.id, p]));
   const latestPaymentByChargeId = new Map<string, Payment>();
+  const latestIntentStatusByChargeId = new Map<string, AdminPaymentStatus>();
 
   for (const payment of payments ?? []) {
     if (!latestPaymentByChargeId.has(payment.charge_id)) {
@@ -410,11 +757,40 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     }
   }
 
+  for (const intent of paymentIntentsByCharge ?? []) {
+    if (!latestIntentStatusByChargeId.has(intent.charge_id)) {
+      latestIntentStatusByChargeId.set(intent.charge_id, intent.status);
+    }
+  }
+
+  function resolveChargePaymentStatus(charge: Charge): AdminPaymentStatus {
+    const payment = latestPaymentByChargeId.get(charge.id);
+    const alreadyPaid = charge.status === "paid" || Boolean(payment);
+
+    if (alreadyPaid) {
+      return "paid";
+    }
+
+    const latestIntentStatus = latestIntentStatusByChargeId.get(charge.id);
+    if (latestIntentStatus) {
+      return latestIntentStatus;
+    }
+
+    if (charge.status === "expired") {
+      return "expired";
+    }
+
+    if (charge.status === "cancelled") {
+      return "cancelled";
+    }
+
+    return "pending";
+  }
+
   const filteredCharges = (charges ?? []).filter((charge) => {
     const athlete = athletesById.get(charge.athlete_user_id);
     const product = productsById.get(charge.product_id);
-    const payment = latestPaymentByChargeId.get(charge.id);
-    const alreadyPaid = charge.status === "paid" || Boolean(payment);
+    const effectiveStatus = resolveChargePaymentStatus(charge);
 
     const athleteName = (athlete?.full_name ?? "").toLowerCase();
     const athleteEmail = (athlete?.email ?? "").toLowerCase();
@@ -427,9 +803,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       productName.includes(searchQuery) ||
       athleteId.includes(searchQuery);
 
-    const matchesPaymentStatus =
-      paymentStatus === "all" ||
-      (paymentStatus === "paid" ? alreadyPaid : !alreadyPaid);
+    const matchesPaymentStatus = paymentStatus === "all" || paymentStatus === effectiveStatus;
 
     const matchesEvent = selectedEventId === "all" || product?.event_id === selectedEventId;
 
@@ -477,6 +851,110 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </Link>
         </div>
       </header>
+
+      <section className="surface-card mb-6 rounded-2xl p-4 md:p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-900">Monitorizacao de pagamentos</h2>
+            <p className="text-sm text-zinc-600">Saude operacional das ultimas 24 horas e alertas ativos.</p>
+          </div>
+          <span className="rounded-full border border-line/70 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-600">
+            Janela: 24h
+          </span>
+        </div>
+
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="rounded-xl border border-line/80 bg-white/80 p-3">
+            <p className="text-xs uppercase tracking-widest text-muted">Intents pagas</p>
+            <p className="mt-1 text-2xl font-semibold text-ok">{paidIntent24hCount ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-line/80 bg-white/80 p-3">
+            <p className="text-xs uppercase tracking-widest text-muted">Intents falhadas</p>
+            <p className="mt-1 text-2xl font-semibold text-danger">{failedIntent24hCount ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-line/80 bg-white/80 p-3">
+            <p className="text-xs uppercase tracking-widest text-muted">Pendentes &gt; 30 min</p>
+            <p className="mt-1 text-2xl font-semibold text-warn">{staleIntentCount ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-line/80 bg-white/80 p-3">
+            <p className="text-xs uppercase tracking-widest text-muted">Webhooks recebidos</p>
+            <p className="mt-1 text-2xl font-semibold text-foreground">{webhookReceived24hCount ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-line/80 bg-white/80 p-3">
+            <p className="text-xs uppercase tracking-widest text-muted">Erros de webhook</p>
+            <p className="mt-1 text-2xl font-semibold text-danger">{webhookError24hCount ?? 0}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <article className="rounded-xl border border-line/80 bg-white/70 p-4">
+            <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.16em] text-zinc-700">
+              Intents pendentes antigas
+            </h3>
+            {!staleIntents || staleIntents.length === 0 ? (
+              <p className="text-sm text-zinc-600">Sem alertas. Nao existem intents pendentes com mais de 30 minutos.</p>
+            ) : (
+              <ul className="space-y-2">
+                {staleIntents.map((intent) => (
+                  <li key={intent.id} className="rounded-lg border border-line/70 bg-white p-3 text-sm text-zinc-700">
+                    <p className="font-semibold text-zinc-900">
+                      Charge {intent.charge_id} · {Number(intent.amount).toFixed(2)} EUR
+                    </p>
+                    <p>
+                      Estado: {intent.status} · Metodo: {intent.method} · Provider: {intent.provider}
+                    </p>
+                    <p>Criada em: {new Date(intent.created_at).toLocaleString("pt-PT")}</p>
+                    {intent.external_request_id ? <p>Request: {intent.external_request_id}</p> : null}
+                    {intent.last_error ? <p className="text-danger">Erro: {intent.last_error}</p> : null}
+                    {intent.provider === "easypay" && intent.external_request_id ? (
+                      <form action={reprocessIntent} className="mt-2">
+                        <input type="hidden" name="intent_id" value={intent.id} />
+                        <button type="submit" className="btn-ghost h-9 rounded-lg px-3 text-xs font-semibold uppercase tracking-[0.14em]">
+                          Reprocessar
+                        </button>
+                      </form>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </article>
+
+          <article className="rounded-xl border border-line/80 bg-white/70 p-4">
+            <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.16em] text-zinc-700">
+              Ultimos erros de webhook
+            </h3>
+            {!webhookErrors || webhookErrors.length === 0 ? (
+              <p className="text-sm text-zinc-600">Sem erros recentes de webhook.</p>
+            ) : (
+              <ul className="space-y-2">
+                {webhookErrors.map((event) => (
+                  <li key={event.id} className="rounded-lg border border-line/70 bg-white p-3 text-sm text-zinc-700">
+                    <p className="font-semibold text-zinc-900">
+                      {event.provider} · {event.event_type ?? "evento"}
+                    </p>
+                    <p>Evento: {event.external_event_id}</p>
+                    <p>Recebido: {new Date(event.received_at).toLocaleString("pt-PT")}</p>
+                    <p className="text-danger">Erro: {event.processing_error}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </article>
+        </div>
+
+        {params.reprocessOk ? (
+          <div className="mt-4 rounded-lg border border-ok/20 bg-emerald-50 p-3 text-sm text-ok">
+            {params.reprocessOk}
+          </div>
+        ) : null}
+
+        {params.reprocessError ? (
+          <div className="mt-4 rounded-lg border border-danger/20 bg-red-50 p-3 text-sm text-danger">
+            {params.reprocessError}
+          </div>
+        ) : null}
+      </section>
 
       <section className="surface-card mb-6 rounded-2xl p-4 md:p-5">
         <div className="mb-4">
@@ -652,13 +1130,26 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       ) : null}
 
       <section className="surface-card sticky top-4 z-20 mb-6 rounded-2xl p-4 md:p-5 backdrop-blur-sm">
-        <AdminChargesFilterForm
+        <AdminChargesFilterAndExport
           selectedMonth={selectedMonth}
           selectedYear={selectedYear}
           searchQuery={params.q ?? ""}
           paymentStatus={paymentStatus}
           selectedEventId={selectedEventId}
           events={(events ?? []).map((event) => ({ id: event.id, title: event.title }))}
+          exportRows={filteredCharges.map(charge => {
+            const athlete = athletesById.get(charge.athlete_user_id);
+            const product = productsById.get(charge.product_id);
+            return {
+              id: charge.id,
+              athlete: athlete?.full_name ?? '',
+              email: athlete?.email ?? '',
+              product: product?.name ?? '',
+              amount: charge.amount,
+              status: resolveChargePaymentStatus(charge),
+              due_date: charge.due_date ?? ''
+            };
+          })}
         />
       </section>
 
@@ -780,3 +1271,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     </main>
   );
 }
+
+
+
+
+
+

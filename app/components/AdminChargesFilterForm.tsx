@@ -12,7 +12,7 @@ type AdminChargesFilterFormProps = {
   selectedMonth: number;
   selectedYear: number;
   searchQuery: string;
-  paymentStatus: "all" | "paid" | "pending";
+  paymentStatus: "all" | "created" | "pending" | "paid" | "failed" | "expired" | "cancelled";
   selectedEventId: string;
   events: EventOption[];
 };
@@ -123,8 +123,12 @@ export default function AdminChargesFilterForm({
           className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
         >
           <option value="all">Todos</option>
-          <option value="pending">Por pagar</option>
+          <option value="created">A iniciar</option>
+          <option value="pending">Pendente</option>
           <option value="paid">Pago</option>
+          <option value="failed">Falhado</option>
+          <option value="expired">Expirado</option>
+          <option value="cancelled">Cancelado</option>
         </select>
       </label>
 
@@ -150,3 +154,4 @@ export default function AdminChargesFilterForm({
     </form>
   );
 }
+

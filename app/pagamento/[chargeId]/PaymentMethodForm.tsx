@@ -37,6 +37,22 @@ type IntentStatusResponse = {
   };
 };
 
+type OpenIntentResponse =
+  | {
+      intent: null;
+    }
+  | {
+      intent: {
+        id: string;
+        status: "created" | "pending" | "paid" | "failed" | "expired" | "cancelled";
+        expires_at: string | null;
+        paid_at: string | null;
+        last_error: string | null;
+      };
+      method: PaymentMethod;
+      instructions: MbwayInstructions | MultibancoInstructions;
+    };
+
 type PaymentMethodFormProps = {
   chargeId: string;
   amount: number;
@@ -54,6 +70,43 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
   const paymentRefreshTriggered = useRef(false);
 
   const formattedAmount = useMemo(() => `${amount.toFixed(2)} EUR`, [amount]);
+
+  async function loadOpenIntent() {
+    const response = await fetch(`/api/payments/open-intent?chargeId=${chargeId}`, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const data = (await response.json()) as OpenIntentResponse;
+
+    if (!data.intent) {
+      return;
+    }
+
+    setMethod(data.method);
+    setIntentResult({
+      intent: {
+        id: data.intent.id,
+        status: data.intent.status,
+        expires_at: data.intent.expires_at,
+      },
+      method: data.method,
+      instructions: data.instructions,
+    });
+    setIntentStatus(data.intent.status);
+    setIntentPaidAt(data.intent.paid_at);
+    setIntentLastError(data.intent.last_error);
+    paymentRefreshTriggered.current = false;
+  }
+
+  useEffect(() => {
+    void loadOpenIntent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chargeId]);
 
   useEffect(() => {
     const intentId = intentResult?.intent.id;
@@ -128,7 +181,12 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
     setLoading(false);
 
     if (!response.ok) {
-      setError(("error" in data && data.error) || "Falha ao iniciar pagamento.");
+      const errorText = ("error" in data && data.error) || "Falha ao iniciar pagamento.";
+      setError(errorText);
+
+      if (response.status === 409 && errorText.toLowerCase().includes("tentativa de pagamento em curso")) {
+        await loadOpenIntent();
+      }
       return;
     }
 
@@ -143,17 +201,19 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
   function statusLabel(status: IntentStatusResponse["intent"]["status"]) {
     switch (status) {
       case "created":
+        return { text: "A iniciar", className: "bg-amber-100 text-amber-800", next: "Aguarde, estamos a preparar o pagamento." };
       case "pending":
-        return { text: "Pendente", className: "bg-amber-100 text-amber-800" };
+        return { text: "Pendente", className: "bg-amber-100 text-amber-800", next: "Aguarde confirmacao ou conclua o pagamento conforme instrucoes." };
       case "paid":
-        return { text: "Pago", className: "bg-emerald-100 text-emerald-800" };
+        return { text: "Pago", className: "bg-emerald-100 text-emerald-800", next: "Pagamento concluido com sucesso." };
       case "expired":
-        return { text: "Expirado", className: "bg-zinc-200 text-zinc-700" };
+        return { text: "Expirado", className: "bg-zinc-200 text-zinc-700", next: "O pagamento expirou. Por favor, gere novo pagamento." };
       case "failed":
-        return { text: "Falhado", className: "bg-red-100 text-red-700" };
+        return { text: "Falhado", className: "bg-red-100 text-red-700", next: "O pagamento falhou. Tente novamente ou contacte o clube." };
       case "cancelled":
-        return { text: "Cancelado", className: "bg-zinc-200 text-zinc-700" };
+        return { text: "Cancelado", className: "bg-zinc-200 text-zinc-700", next: "Pagamento cancelado. Se necessario, gere novo pagamento." };
     }
+    return { text: status, className: "bg-zinc-200 text-zinc-700", next: "" };
   }
 
   return (
@@ -271,9 +331,14 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
       ) : null}
 
       {intentResult && intentStatus ? (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="font-semibold text-zinc-700">Estado da intencao:</span>
-          <span className={`badge ${statusLabel(intentStatus).className}`}>{statusLabel(intentStatus).text}</span>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-semibold text-zinc-700">Estado da tentativa:</span>
+            <span className={`badge ${statusLabel(intentStatus).className}`}>{statusLabel(intentStatus).text}</span>
+          </div>
+          <div className="text-xs text-zinc-600">
+            {statusLabel(intentStatus).next}
+          </div>
         </div>
       ) : null}
 
