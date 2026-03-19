@@ -221,14 +221,14 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand">Metodo de pagamento</p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-white p-4">
+          <label className={`flex cursor-pointer items-start gap-3 rounded-xl border bg-white p-4 transition ${method === "mbway" ? "border-brand/60 ring-2 ring-brand/20" : "border-line"}`}>
             <input
               type="radio"
               name="payment_method"
               value="mbway"
               checked={method === "mbway"}
               onChange={() => setMethod("mbway")}
-              className="mt-1"
+              className="mt-0.5 h-4 w-4"
             />
             <span>
               <strong className="block text-zinc-900">MB Way</strong>
@@ -236,14 +236,14 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
             </span>
           </label>
 
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-white p-4">
+          <label className={`flex cursor-pointer items-start gap-3 rounded-xl border bg-white p-4 transition ${method === "multibanco" ? "border-brand/60 ring-2 ring-brand/20" : "border-line"}`}>
             <input
               type="radio"
               name="payment_method"
               value="multibanco"
               checked={method === "multibanco"}
               onChange={() => setMethod("multibanco")}
-              className="mt-1"
+              className="mt-0.5 h-4 w-4"
             />
             <span>
               <strong className="block text-zinc-900">Multibanco</strong>
@@ -264,7 +264,7 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
               required
               placeholder="Ex: 912345678"
               pattern="[0-9]{9}"
-              className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+              className="h-11 rounded-lg border border-line bg-white px-3 text-zinc-900"
             />
           </label>
 
@@ -275,7 +275,7 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
               name="mbway_name"
               required
               placeholder="Nome completo"
-              className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+              className="h-11 rounded-lg border border-line bg-white px-3 text-zinc-900"
             />
           </label>
         </div>
@@ -289,7 +289,7 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
               name="multibanco_email"
               required
               placeholder="atleta@exemplo.pt"
-              className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+              className="h-11 rounded-lg border border-line bg-white px-3 text-zinc-900"
             />
           </label>
 
@@ -301,7 +301,7 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
               inputMode="numeric"
               pattern="[0-9]{9}"
               placeholder="123456789"
-              className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+              className="h-11 rounded-lg border border-line bg-white px-3 text-zinc-900"
             />
           </label>
         </div>
@@ -319,7 +319,7 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
       <button
         type="submit"
         disabled={loading}
-        className="btn-primary h-10 rounded-lg px-5 font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+        className="btn-primary h-11 w-full rounded-lg px-5 font-semibold disabled:cursor-not-allowed disabled:opacity-60 sm:h-10 sm:w-auto"
       >
         {loading ? "A iniciar..." : "Continuar para pagamento"}
       </button>
@@ -331,8 +331,8 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
       ) : null}
 
       {intentResult && intentStatus ? (
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-sm">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="font-semibold text-zinc-700">Estado da tentativa:</span>
             <span className={`badge ${statusLabel(intentStatus).className}`}>{statusLabel(intentStatus).text}</span>
           </div>
@@ -343,7 +343,7 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
       ) : null}
 
       {intentResult && intentResult.method === "mbway" ? (
-        <div className="rounded-lg border border-ok/20 bg-emerald-50 p-4 text-sm text-emerald-800">
+        <div className="rounded-lg border border-ok/20 bg-emerald-50 p-4 text-sm text-emerald-800 break-words">
           <p className="font-semibold">Pagamento MB Way iniciado</p>
           <p className="mt-1">{(intentResult.instructions as MbwayInstructions).message}</p>
           <p className="mt-1">
@@ -369,14 +369,14 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
       ) : null}
 
       {intentResult && intentResult.method === "multibanco" ? (
-        <div className="rounded-lg border border-ok/20 bg-emerald-50 p-4 text-sm text-emerald-800">
+        <div className="rounded-lg border border-ok/20 bg-emerald-50 p-4 text-sm text-emerald-800 break-words">
           <p className="font-semibold">Referencia Multibanco gerada</p>
           <p className="mt-1">{(intentResult.instructions as MultibancoInstructions).message}</p>
           <p className="mt-1">
-            <strong>Entidade:</strong> {(intentResult.instructions as MultibancoInstructions).entity}
+            <strong>Entidade:</strong> <span className="font-mono tracking-wide">{(intentResult.instructions as MultibancoInstructions).entity}</span>
           </p>
           <p className="mt-1">
-            <strong>Referencia:</strong> {(intentResult.instructions as MultibancoInstructions).reference}
+            <strong>Referencia:</strong> <span className="font-mono tracking-wide">{(intentResult.instructions as MultibancoInstructions).reference}</span>
           </p>
           <p className="mt-1">
             <strong>Valor:</strong> {(intentResult.instructions as MultibancoInstructions).amount.toFixed(2)} EUR
@@ -402,3 +402,6 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
     </form>
   );
 }
+
+
+

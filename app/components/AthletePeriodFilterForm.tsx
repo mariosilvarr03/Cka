@@ -42,7 +42,7 @@ export default function AthletePeriodFilterForm({ selectedMonth, selectedYear }:
         <select
           name="month"
           defaultValue={String(selectedMonth)}
-          className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+          className="h-11 rounded-lg border border-line bg-white px-3 text-zinc-900 md:h-10"
         >
           {months.map((month) => {
             const monthName = monthFormatter.format(new Date(2026, month - 1, 1));
@@ -60,7 +60,7 @@ export default function AthletePeriodFilterForm({ selectedMonth, selectedYear }:
         <select
           name="year"
           defaultValue={String(selectedYear)}
-          className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+          className="h-11 rounded-lg border border-line bg-white px-3 text-zinc-900 md:h-10"
         >
           {years.map((year) => (
             <option key={year} value={year}>
@@ -70,9 +70,10 @@ export default function AthletePeriodFilterForm({ selectedMonth, selectedYear }:
         </select>
       </label>
 
-      <button type="submit" className="btn-primary h-10 rounded-lg px-5 font-semibold">
+      <button type="submit" className="btn-primary h-11 w-full rounded-lg px-5 font-semibold md:h-10 md:w-auto">
         Ver estado
       </button>
     </form>
   );
 }
+

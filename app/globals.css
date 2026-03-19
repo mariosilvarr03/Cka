@@ -95,3 +95,27 @@ body::before {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+
+
+@media (max-width: 768px) {
+  body::before {
+    opacity: 0.14;
+  }
+
+  .surface-card {
+    box-shadow: 0 10px 20px rgba(97, 71, 41, 0.07);
+  }
+
+  .section-title {
+    font-size: 1.35rem;
+    line-height: 1.2;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font-size: 16px;
+  }
+}
+

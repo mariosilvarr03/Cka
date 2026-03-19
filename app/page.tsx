@@ -237,9 +237,9 @@ export default async function Home({ searchParams }: PageProps) {
   const pendingThisMonth = Math.max(chargesInPeriod.length - paidThisMonth, 0);
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-6xl px-5 py-8 md:px-8 md:py-10">
-      <header className="surface-card mb-8 rounded-2xl p-5 md:p-7">
-        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+    <main className="mx-auto min-h-screen w-full max-w-6xl px-4 py-5 sm:px-5 sm:py-7 md:px-8 md:py-10">
+      <header className="surface-card mb-6 rounded-2xl p-4 sm:p-5 md:mb-8 md:p-7">
+        <div className="mb-5 flex flex-col gap-4 md:mb-6 md:flex-row md:items-start md:justify-between">
           <div className="flex flex-col gap-2">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand">Portal do Atleta</p>
             <h1 className="section-title text-foreground">Mensalidades</h1>
@@ -256,13 +256,13 @@ export default async function Home({ searchParams }: PageProps) {
           </div>
 
           <form action={signOut}>
-            <button type="submit" className="btn-ghost h-10 rounded-lg px-4 font-medium hover:bg-white">
+            <button type="submit" className="btn-ghost h-11 w-full rounded-lg px-4 font-medium hover:bg-white md:h-10 md:w-auto">
               Terminar sessao
             </button>
           </form>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-line/80 bg-white/75 p-4">
             <p className="text-xs uppercase tracking-widest text-muted">Periodo</p>
             <p className="mt-1 text-xl font-semibold text-foreground">{selectedMonth}/{selectedYear}</p>
@@ -278,7 +278,7 @@ export default async function Home({ searchParams }: PageProps) {
         </div>
       </header>
 
-      <section className="surface-card mb-8 rounded-2xl p-4 md:p-5">
+      <section className="surface-card mb-6 rounded-2xl p-4 md:mb-8 md:p-5">
         <AthletePeriodFilterForm selectedMonth={selectedMonth} selectedYear={selectedYear} />
       </section>
 
@@ -347,7 +347,7 @@ export default async function Home({ searchParams }: PageProps) {
                   <Link
                     href={`/pagamento/${charge.id}`}
                     scroll={false}
-                    className="btn-primary inline-flex h-10 items-center rounded-lg px-4 font-semibold"
+                    className="btn-primary inline-flex h-11 w-full items-center justify-center rounded-lg px-4 font-semibold sm:h-10 sm:w-auto"
                   >
                     {event ? "Pagar inscricao" : "Pagar mensalidade"}
                   </Link>
@@ -413,7 +413,7 @@ export default async function Home({ searchParams }: PageProps) {
                 <Link
                   href={`/pagamento/${charge.id}`}
                   scroll={false}
-                  className="btn-primary inline-flex h-10 items-center rounded-lg px-4 font-semibold"
+                  className="btn-primary inline-flex h-11 w-full items-center justify-center rounded-lg px-4 font-semibold sm:h-10 sm:w-auto"
                 >
                   {event ? "Pagar inscricao" : "Pagar mensalidade"}
                 </Link>
@@ -425,3 +425,4 @@ export default async function Home({ searchParams }: PageProps) {
     </main>
   );
 }
+

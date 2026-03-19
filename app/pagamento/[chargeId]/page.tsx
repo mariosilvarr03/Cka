@@ -56,15 +56,15 @@ export default async function PaymentPage({ params }: PageProps) {
   const alreadyPaid = charge.status === "paid";
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl px-5 py-8 md:px-8 md:py-10">
-      <header className="surface-card mb-6 rounded-2xl p-5 md:p-7">
+    <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-5 sm:px-5 sm:py-7 md:px-8 md:py-10">
+      <header className="surface-card mb-5 rounded-2xl p-4 sm:p-5 md:mb-6 md:p-7">
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand">Pagamento</p>
         <h1 className="section-title text-foreground">Pagar mensalidade</h1>
         <p className="muted mt-2">Escolhe o metodo de pagamento para concluir esta cobranca.</p>
       </header>
 
-      <section className="surface-card rounded-2xl p-5 md:p-6">
-        <div className="mb-5 grid grid-cols-1 gap-3 rounded-xl border border-line/80 bg-white/75 p-4 text-sm text-zinc-700 md:grid-cols-2">
+      <section className="surface-card rounded-2xl p-4 sm:p-5 md:p-6">
+        <div className="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-line/80 bg-white/75 p-4 text-sm text-zinc-700 md:mb-5 md:grid-cols-2">
           <p>
             <strong>Produto:</strong> {product?.name ?? "Mensalidade"}
           </p>
@@ -91,7 +91,7 @@ export default async function PaymentPage({ params }: PageProps) {
           <Link
             href="/"
             scroll={false}
-            className="btn-ghost inline-flex h-10 items-center rounded-lg px-4 font-medium hover:bg-white"
+            className="btn-ghost inline-flex h-11 w-full items-center justify-center rounded-lg px-4 font-medium hover:bg-white sm:h-10 sm:w-auto"
           >
             Voltar para mensalidades
           </Link>
@@ -100,3 +100,4 @@ export default async function PaymentPage({ params }: PageProps) {
     </main>
   );
 }
+
