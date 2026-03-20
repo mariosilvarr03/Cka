@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import InviteAcceptHandler from "./InviteAcceptHandler";
 import { redirect } from "next/navigation";
 
 type LoginPageProps = {
@@ -54,6 +55,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <h2 className="mb-1 text-2xl font-bold text-zinc-900">Entrar</h2>
           <p className="mb-6 text-sm text-zinc-600">Usa o teu email e password para continuar.</p>
 
+          <InviteAcceptHandler />
+
           {params.error ? (
             <p className="mb-4 rounded-lg border border-danger/20 bg-red-50 p-3 text-sm text-danger">
               {params.error}
@@ -92,3 +95,4 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     </main>
   );
 }
+
