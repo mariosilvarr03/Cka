@@ -109,7 +109,7 @@ function normalizeBaseUrl(url: string) {
 }
 
 function extractEasypayMethod(data: Record<string, unknown>, fallback: SupportedPaymentMethod): SupportedPaymentMethod {
-  const method = pickString(data, ["method", "payment.method", "single.method"]).toLowerCase();
+  const method = pickString(data, ["method", "method.type", "payment.method", "single.method"]).toLowerCase();
 
   if (method === "mbw" || method === "mbway") {
     return "mbway";
@@ -213,15 +213,18 @@ async function createRealProviderIntent(input: CreateIntentInput): Promise<Provi
 
   const payment = getRecord(data, "payment");
   const multibanco = getRecord(data, "multibanco");
+  const methodData = getRecord(data, "method");
   const capture = getRecord(data, "capture");
 
   const externalReference =
     pickString(multibanco, ["reference"]) ||
+    pickString(methodData, ["reference"]) ||
     pickString(payment, ["reference"]) ||
     pickString(capture, ["reference"]) ||
     pickString(data, ["reference"]);
   const externalEntity =
     pickString(multibanco, ["entity"]) ||
+    pickString(methodData, ["entity"]) ||
     pickString(payment, ["entity"]) ||
     pickString(capture, ["entity"]) ||
     pickString(data, ["entity"]);

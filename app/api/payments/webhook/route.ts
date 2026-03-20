@@ -29,6 +29,20 @@ function getString(data: Record<string, unknown>, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function getNestedString(data: Record<string, unknown>, path: string) {
+  const keys = path.split(".");
+  let current: unknown = data;
+
+  for (const key of keys) {
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      return "";
+    }
+    current = (current as Record<string, unknown>)[key];
+  }
+
+  return typeof current === "string" ? current.trim() : "";
+}
+
 function getNumber(data: Record<string, unknown>, key: string) {
   const value = data[key];
   if (typeof value === "number") {
@@ -188,6 +202,7 @@ export async function POST(request: Request) {
     eventData.status = String(payload.status ?? "").trim();
     eventData.type = String(payload.type ?? "").trim();
     eventData.provider_ref = String(payload.key ?? "").trim();
+    eventData.key = String(payload.key ?? "").trim();
     eventData.date = String(payload.date ?? "").trim();
   }
 
@@ -206,13 +221,16 @@ export async function POST(request: Request) {
 
     try {
       const verification = await fetchEasypaySingle(paymentIdFromEvent);
-      const verificationStatus = getString(verification, "status");
-      const verificationType = getString(verification, "type") || eventType;
+      const verificationStatus =
+        getString(verification, "status") ||
+        getString(verification, "payment_status") ||
+        getNestedString(verification, "method.status");
+      const verificationType = getString(verification, "type") || getNestedString(verification, "method.type") || eventType;
       const verificationKey = getString(verification, "key");
-      const verificationDate = getString(verification, "date");
+      const verificationDate = getString(verification, "date") || getString(verification, "created_at");
       const verificationAmount = getNumber(verification, "value");
-      const verificationEntity = getString(verification, "entity");
-      const verificationReference = getString(verification, "reference");
+      const verificationEntity = getString(verification, "entity") || getNestedString(verification, "method.entity");
+      const verificationReference = getString(verification, "reference") || getNestedString(verification, "method.reference");
 
       eventData.external_request_id = paymentIdFromEvent;
       eventData.status = verificationStatus || getString(eventData, "status");
@@ -220,6 +238,7 @@ export async function POST(request: Request) {
 
       if (verificationKey) {
         eventData.provider_ref = verificationKey;
+        eventData.key = verificationKey;
       }
       if (verificationDate) {
         eventData.paid_at = verificationDate;
