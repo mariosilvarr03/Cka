@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import AdminAthleteNameFilterForm from "@/app/components/AdminAthleteNameFilterForm";
 import AdminChargesFilterAndExport from "@/app/components/AdminChargesFilterAndExport.client";
-
 type AdminPageProps = {
   searchParams: Promise<{
     month?: string;
@@ -370,15 +369,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
     const fullName = String(formData.get("full_name") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim().toLowerCase();
-    const password = String(formData.get("password") ?? "").trim();
     const categoryId = Number(formData.get("category_id") ?? 0);
 
-    if (!fullName || !email || !password || !Number.isInteger(categoryId) || categoryId <= 0) {
-      redirect("/admin?accountError=Preenche+nome+email+password+e+categoria");
-    }
-
-    if (password.length < 8) {
-      redirect("/admin?accountError=A+password+deve+ter+pelo+menos+8+caracteres");
+    if (!fullName || !email || !Number.isInteger(categoryId) || categoryId <= 0) {
+      redirect("/admin?accountError=Preenche+nome+email+e+categoria");
     }
 
     const supabase = await createClient();
@@ -402,31 +396,40 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     }
 
     const adminClient = createAdminClient();
-    const { data: createdData, error: createError } = await adminClient.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
+    const appBaseUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+    const inviteRedirectTo = appBaseUrl ? `${appBaseUrl}/auth/callback` : undefined;
+
+    const { data: invitedData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+      data: {
         full_name: fullName,
       },
+      ...(inviteRedirectTo ? { redirectTo: inviteRedirectTo } : {}),
     });
 
-    if (createError || !createdData.user?.id) {
-      redirect("/admin?accountError=Falha+ao+criar+conta+de+acesso");
+    if (inviteError || !invitedData.user?.id) {
+      if (inviteError?.message?.toLowerCase().includes("already")) {
+        redirect("/admin?accountError=Ja+existe+uma+conta+com+esse+email");
+      }
+      redirect("/admin?accountError=Falha+ao+enviar+convite+por+email");
     }
 
-    const createdUserId = createdData.user.id;
+    const createdUserId = invitedData.user.id;
 
     const { error: profileError } = await adminClient
       .from("profiles")
-      .update({
-        full_name: fullName,
-        email,
-        role: "athlete",
-        category_id: categoryId,
-        active: true,
-      })
-      .eq("user_id", createdUserId);
+      .upsert(
+        {
+          user_id: createdUserId,
+          full_name: fullName,
+          email,
+          role: "athlete",
+          category_id: categoryId,
+          active: true,
+        },
+        { onConflict: "user_id" },
+      );
 
     if (profileError) {
       redirect("/admin?accountError=Conta+criada+mas+falhou+atualizacao+de+perfil");
@@ -964,10 +967,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       <section className="surface-card mb-6 rounded-2xl p-4 md:p-5">
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-zinc-900">Criar conta de atleta</h2>
-          <p className="text-sm text-zinc-600">Cria a conta com password inicial. Depois o atleta pode alterar a password na area de conta.</p>
+          <p className="text-sm text-zinc-600">Cria a conta e envia convite por email para o atleta definir a password.</p>
         </div>
 
-        <form action={createAthleteAccount} className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-[1.2fr_1fr_1fr_1fr_auto] md:items-end">
+        <form action={createAthleteAccount} className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-[1.2fr_1fr_1fr_auto] md:items-end">
           <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
             Nome
             <input
@@ -989,19 +992,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
             />
           </label>
-
-          <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
-            Password inicial
-            <input
-              type="password"
-              name="password"
-              required
-              minLength={8}
-              placeholder="Minimo 8 caracteres"
-              className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
-            />
-          </label>
-
           <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
             Categoria
             <select
@@ -1025,7 +1015,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
         {params.accountOk ? (
           <div className="mb-4 rounded-lg border border-ok/20 bg-emerald-50 p-3 text-sm text-ok">
-            Conta criada com sucesso. Partilha email e password inicial com o atleta.
+            Conta criada com sucesso. Foi enviado um email de convite ao atleta para definir a password.
           </div>
         ) : null}
 
@@ -1276,14 +1266,4 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     </main>
   );
 }
-
-
-
-
-
-
-
-
-
-
 
