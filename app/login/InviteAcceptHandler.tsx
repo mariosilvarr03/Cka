@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 
 export default function InviteAcceptHandler() {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -21,7 +20,7 @@ export default function InviteAcceptHandler() {
     const type = params.get("type");
 
     if (!accessToken || !refreshToken) {
-      setError("Convite invalido. Pede um novo convite ao administrador.");
+      router.replace("/login?error=Convite+invalido.+Pede+um+novo+convite+ao+administrador.");
       return;
     }
 
@@ -34,7 +33,7 @@ export default function InviteAcceptHandler() {
       });
 
       if (sessionError) {
-        setError("Nao foi possivel validar o convite. Pede um novo convite.");
+        router.replace("/login?error=Nao+foi+possivel+validar+o+convite.+Pede+um+novo+convite.");
         return;
       }
 
@@ -47,14 +46,5 @@ export default function InviteAcceptHandler() {
     })();
   }, [router]);
 
-  if (!error) {
-    return null;
-  }
-
-  return (
-    <p className="mb-4 rounded-lg border border-danger/20 bg-red-50 p-3 text-sm text-danger">
-      {error}
-    </p>
-  );
+  return null;
 }
-
