@@ -412,6 +412,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       if (inviteError?.message?.toLowerCase().includes("already")) {
         redirect("/admin?accountError=Ja+existe+uma+conta+com+esse+email");
       }
+
+      const detailedMessage = inviteError?.message?.trim();
+      if (detailedMessage) {
+        redirect(`/admin?accountError=${encodeURIComponent(`Falha ao enviar convite: ${detailedMessage}`)}`);
+      }
+
       redirect("/admin?accountError=Falha+ao+enviar+convite+por+email");
     }
 
@@ -1266,4 +1272,5 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     </main>
   );
 }
+
 
