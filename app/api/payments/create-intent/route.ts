@@ -153,7 +153,7 @@ export async function POST(request: Request) {
       method: providerIntent.method,
       instructions: providerIntent.instructions,
     });
-  } catch {
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+  } catch (e) {
+    return NextResponse.json( e , { status: 500 });
   }
 }
