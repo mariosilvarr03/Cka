@@ -54,9 +54,11 @@ export default async function EventEditPage({
   params: Promise<{ eventId: string }>;
   searchParams: Promise<{
     updateEventOk?: string;
+    updateEventError?: string;
     addOk?: string;
     addError?: string;
     removeOk?: string;
+    removeError?: string;
     amountOk?: string;
     amountError?: string;
   }>;
@@ -77,7 +79,7 @@ export default async function EventEditPage({
     const paymentDeadline = String(formData.get("payment_deadline") ?? "").trim();
 
     if (!eventId || !title || !eventDate) {
-      redirect(`/admin/eventos/${eventId}?amountError=${encodeURIComponent("Título e data do evento são obrigatórios")}`);
+      redirect(`/admin/eventos/${eventId}?updateEventError=${encodeURIComponent("Título e data do evento são obrigatórios")}`);
     }
 
     const { error: eventError } = await adminDb
@@ -90,7 +92,7 @@ export default async function EventEditPage({
       .eq("id", eventId);
 
     if (eventError) {
-      redirect(`/admin/eventos/${eventId}?amountError=${encodeURIComponent("Falha ao atualizar evento")}`);
+      redirect(`/admin/eventos/${eventId}?updateEventError=${encodeURIComponent("Falha ao atualizar evento")}`);
     }
 
     // Update due_date on pending charges via the event's product
@@ -212,6 +214,8 @@ export default async function EventEditPage({
     }
 
     revalidatePath(`/admin/eventos/${eventId}`);
+    revalidatePath("/admin");
+    revalidatePath("/");
     redirect(`/admin/eventos/${eventId}?addOk=1`);
   }
 
@@ -225,7 +229,7 @@ export default async function EventEditPage({
     const chargeId = String(formData.get("charge_id") ?? "").trim();
 
     if (!eventId || !registrationId) {
-      redirect(`/admin/eventos/${eventId}?amountError=${encodeURIComponent("Dados inválidos")}`);
+      redirect(`/admin/eventos/${eventId}?removeError=${encodeURIComponent("Dados inválidos")}`);
     }
 
     if (chargeId) {
@@ -243,7 +247,7 @@ export default async function EventEditPage({
         .neq("status", "paid");
 
       if (chargeError) {
-        redirect(`/admin/eventos/${eventId}?amountError=${encodeURIComponent("Falha ao cancelar cobrança")}`);
+        redirect(`/admin/eventos/${eventId}?removeError=${encodeURIComponent("Falha ao cancelar cobrança")}`);
       }
     }
 
@@ -253,10 +257,12 @@ export default async function EventEditPage({
       .eq("id", registrationId);
 
     if (regError) {
-      redirect(`/admin/eventos/${eventId}?amountError=${encodeURIComponent("Falha ao remover inscrição")}`);
+      redirect(`/admin/eventos/${eventId}?removeError=${encodeURIComponent("Falha ao remover inscrição")}`);
     }
 
     revalidatePath(`/admin/eventos/${eventId}`);
+    revalidatePath("/admin");
+    revalidatePath("/");
     redirect(`/admin/eventos/${eventId}?removeOk=1`);
   }
 
@@ -394,6 +400,11 @@ export default async function EventEditPage({
           Evento atualizado com sucesso.
         </div>
       ) : null}
+      {sp.updateEventError ? (
+        <div className="rounded-lg border border-danger/20 bg-red-50 px-4 py-3 text-sm text-danger">
+          {sp.updateEventError}
+        </div>
+      ) : null}
       {sp.addOk ? (
         <div className="rounded-lg border border-ok/20 bg-emerald-50 px-4 py-3 text-sm text-ok">
           Inscrição adicionada com sucesso.
@@ -402,6 +413,11 @@ export default async function EventEditPage({
       {sp.removeOk ? (
         <div className="rounded-lg border border-ok/20 bg-emerald-50 px-4 py-3 text-sm text-ok">
           Inscrição removida com sucesso.
+        </div>
+      ) : null}
+      {sp.removeError ? (
+        <div className="rounded-lg border border-danger/20 bg-red-50 px-4 py-3 text-sm text-danger">
+          {sp.removeError}
         </div>
       ) : null}
       {sp.amountOk ? (
