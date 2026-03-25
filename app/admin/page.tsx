@@ -46,6 +46,7 @@ type EventOption = {
   id: string;
   title: string;
   event_date: string;
+  payment_deadline: string | null;
   status: "draft" | "open" | "closed" | "cancelled";
 };
 
@@ -677,7 +678,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   const { data: events } = await supabase
     .from("events")
-    .select("id, title, event_date, status")
+    .select("id, title, event_date, payment_deadline, status")
     .order("event_date", { ascending: false })
     .returns<EventOption[]>();
 
@@ -1128,6 +1129,65 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         <div className="surface-card mb-4 rounded-lg border border-danger/20 bg-red-50 p-3 text-sm text-danger">
           {params.eventError}
         </div>
+      ) : null}
+
+      {(events ?? []).length > 0 ? (
+        <section className="surface-card mb-6 rounded-2xl p-4 md:p-5">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-zinc-900">Eventos</h2>
+            <p className="text-sm text-zinc-600">Clica em "Editar" para gerir inscrições, valores e datas.</p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-zinc-700">
+              <thead>
+                <tr className="border-b border-line/70 text-left text-xs uppercase tracking-wider text-muted">
+                  <th className="pb-2 pr-4 font-semibold">Nome</th>
+                  <th className="pb-2 pr-4 font-semibold">Data</th>
+                  <th className="pb-2 pr-4 font-semibold">Prazo pag.</th>
+                  <th className="pb-2 pr-4 font-semibold">Estado</th>
+                  <th className="pb-2 font-semibold"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line/50">
+                {(events ?? []).map((event) => (
+                  <tr key={event.id} className="hover:bg-white/50">
+                    <td className="py-2 pr-4 font-medium text-zinc-900">{event.title}</td>
+                    <td className="py-2 pr-4">{new Date(event.event_date).toLocaleDateString("pt-PT")}</td>
+                    <td className="py-2 pr-4">
+                      {event.payment_deadline
+                        ? new Date(event.payment_deadline).toLocaleDateString("pt-PT")
+                        : "—"}
+                    </td>
+                    <td className="py-2 pr-4">
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          event.status === "open"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : event.status === "closed"
+                              ? "bg-zinc-100 text-zinc-600"
+                              : event.status === "cancelled"
+                                ? "bg-rose-100 text-rose-800"
+                                : "bg-amber-100 text-amber-800"
+                        }`}
+                      >
+                        {event.status}
+                      </span>
+                    </td>
+                    <td className="py-2 text-right">
+                      <Link
+                        href={`/admin/eventos/${event.id}`}
+                        className="btn-ghost inline-flex h-8 items-center rounded-lg px-3 text-xs font-semibold uppercase tracking-[0.14em] hover:bg-white"
+                      >
+                        Editar
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       ) : null}
 
       <section className="surface-card sticky top-4 z-20 mb-6 rounded-2xl p-4 md:p-5 backdrop-blur-sm">
