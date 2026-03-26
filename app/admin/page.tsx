@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import AdminChargesFilterAndExport from "@/app/components/AdminChargesFilterAndExport.client";
 import AdminCreateEventForm from "@/app/components/AdminCreateEventForm.client";
+import AdminCsvImportForm from "@/app/components/AdminCsvImportForm.client";
 type AdminPageProps = {
   searchParams: Promise<{
     month?: string;
@@ -17,6 +18,8 @@ type AdminPageProps = {
     error?: string;
     eventOk?: string;
     eventError?: string;
+    csvOk?: string;
+    csvError?: string;
     accountOk?: string;
     accountError?: string;
     reprocessOk?: string;
@@ -444,6 +447,91 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
     revalidatePath("/admin");
     redirect("/admin?accountOk=1");
+  }
+
+  async function importAthletesCSV(formData: FormData) {
+    "use server";
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) redirect("/login");
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (profile?.role !== "admin") redirect("/");
+
+    const count = Number(formData.get("count") ?? 0);
+    if (!Number.isInteger(count) || count <= 0) {
+      redirect("/admin?csvError=Ficheiro+inválido+ou+sem+linhas+válidas");
+    }
+
+    const adminClient = createAdminClient();
+    const appBaseUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+    const inviteRedirectTo = appBaseUrl ? `${appBaseUrl}/auth/callback` : undefined;
+
+    let created = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < count; i++) {
+      const fullName = String(formData.get(`full_name_${i}`) ?? "").trim();
+      const email = String(formData.get(`email_${i}`) ?? "").trim().toLowerCase();
+      const categoryId = Number(formData.get(`category_id_${i}`) ?? 0);
+
+      if (!fullName || !email || !categoryId) continue;
+
+      const { data: invitedData, error: inviteError } =
+        await adminClient.auth.admin.inviteUserByEmail(email, {
+          data: { full_name: fullName },
+          ...(inviteRedirectTo ? { redirectTo: inviteRedirectTo } : {}),
+        });
+
+      if (inviteError || !invitedData?.user?.id) {
+        const msg = inviteError?.message?.toLowerCase().includes("already")
+          ? `${email}: já existe`
+          : `${email}: ${inviteError?.message ?? "erro desconhecido"}`;
+        errors.push(msg);
+        continue;
+      }
+
+      const { error: profileError } = await adminClient
+        .from("profiles")
+        .upsert(
+          {
+            user_id: invitedData.user.id,
+            full_name: fullName,
+            email,
+            role: "athlete",
+            category_id: categoryId,
+            active: true,
+          },
+          { onConflict: "user_id" },
+        );
+
+      if (profileError) {
+        errors.push(`${email}: perfil não criado`);
+        continue;
+      }
+
+      created++;
+    }
+
+    revalidatePath("/admin");
+
+    if (errors.length > 0) {
+      const summary = encodeURIComponent(
+        `${created} importados. Erros: ${errors.slice(0, 3).join("; ")}${errors.length > 3 ? ` (+${errors.length - 3})` : ""}`,
+      );
+      redirect(`/admin?csvError=${summary}`);
+    }
+
+    redirect(`/admin?csvOk=${created}`);
   }
 
   async function createEvent(formData: FormData) {
@@ -1029,6 +1117,33 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         {params.accountError ? (
           <div className="mb-4 rounded-lg border border-danger/20 bg-red-50 p-3 text-sm text-danger">
             {params.accountError}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="surface-card mb-6 rounded-2xl p-4 md:p-5">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-zinc-900">Importar atletas via CSV</h2>
+          <p className="text-sm text-zinc-600">
+            Importa vários atletas de uma vez. O ficheiro deve ter colunas:{" "}
+            <span className="font-mono text-xs">nome, email, categoria</span>.
+          </p>
+        </div>
+
+        <AdminCsvImportForm
+          categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name }))}
+          action={importAthletesCSV}
+        />
+
+        {params.csvOk ? (
+          <div className="mt-4 rounded-lg border border-ok/20 bg-emerald-50 p-3 text-sm text-ok">
+            {params.csvOk} atleta{Number(params.csvOk) !== 1 ? "s" : ""} importado{Number(params.csvOk) !== 1 ? "s" : ""} com sucesso.
+          </div>
+        ) : null}
+
+        {params.csvError ? (
+          <div className="mt-4 rounded-lg border border-danger/20 bg-red-50 p-3 text-sm text-danger">
+            {params.csvError}
           </div>
         ) : null}
       </section>
