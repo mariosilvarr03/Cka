@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import AdminAthleteNameFilterForm from "@/app/components/AdminAthleteNameFilterForm";
 import AdminChargesFilterAndExport from "@/app/components/AdminChargesFilterAndExport.client";
+import AdminCreateEventForm from "@/app/components/AdminCreateEventForm.client";
 type AdminPageProps = {
   searchParams: Promise<{
     month?: string;
@@ -1041,82 +1042,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
         <AdminAthleteNameFilterForm athleteName={params.athleteName ?? ""} />
 
-        <form action={createEvent} className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
-              Nome do evento
-              <input
-                type="text"
-                name="event_title"
-                required
-                placeholder="Ex: Campeonato Regional"
-                className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
-              />
-            </label>
-
-            <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
-              Data do evento
-              <input
-                type="date"
-                name="event_date"
-                required
-                className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
-              />
-            </label>
-
-            <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
-              Data limite de pagamento
-              <input
-                type="date"
-                name="payment_deadline"
-                className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
-              />
-            </label>
-          </div>
-
-          <div className="rounded-xl border border-line/80 bg-white/70 p-4">
-            <p className="sticky top-0 z-10 mb-3 border-b border-line/70 bg-white/95 pb-2 text-sm font-semibold text-zinc-800 backdrop-blur-sm">
-              Atletas inscritos e valor a pagar
-            </p>
-
-            {filteredAthleteOptions.length === 0 ? (
-              <p className="text-sm text-zinc-600">Sem atletas ativos para adicionar ao evento.</p>
-            ) : (
-              <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-                {filteredAthleteOptions.map((athlete) => (
-                  <div
-                    key={athlete.user_id}
-                    className="grid grid-cols-1 gap-3 rounded-lg border border-line/70 bg-white p-3 md:grid-cols-[1fr_auto] md:items-center"
-                  >
-                    <label className="flex items-start gap-3 text-sm text-zinc-800">
-                      <input type="checkbox" name="athlete_ids" value={athlete.user_id} className="mt-1" />
-                      <span>
-                        <strong className="block">{athlete.full_name}</strong>
-                        {athlete.email ? <span className="text-zinc-500">{athlete.email}</span> : null}
-                      </span>
-                    </label>
-
-                    <label className="flex items-center gap-2 text-sm font-semibold text-zinc-700">
-                      Valor (EUR)
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        placeholder="Ex: 12.50"
-                        name={`amount_${athlete.user_id}`}
-                        className="h-10 w-28 rounded-lg border border-line bg-white px-3 text-zinc-900"
-                      />
-                    </label>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <button type="submit" className="btn-primary h-10 rounded-lg px-5 font-semibold">
-            Criar evento
-          </button>
-        </form>
+        <AdminCreateEventForm athletes={filteredAthleteOptions} action={createEvent} />
       </section>
 
       {params.eventOk ? (
