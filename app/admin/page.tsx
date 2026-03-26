@@ -3,7 +3,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import AdminAthleteNameFilterForm from "@/app/components/AdminAthleteNameFilterForm";
 import AdminChargesFilterAndExport from "@/app/components/AdminChargesFilterAndExport.client";
 import AdminCreateEventForm from "@/app/components/AdminCreateEventForm.client";
 type AdminPageProps = {
@@ -1040,9 +1039,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <p className="text-sm text-zinc-600">Define o evento, seleciona os atletas inscritos e o valor individual de cada inscricao.</p>
         </div>
 
-        <AdminAthleteNameFilterForm athleteName={params.athleteName ?? ""} />
-
-        <AdminCreateEventForm athletes={filteredAthleteOptions} action={createEvent} />
+        <AdminCreateEventForm athletes={filteredAthleteOptions} athleteName={params.athleteName ?? ""} action={createEvent} />
       </section>
 
       {params.eventOk ? (
@@ -1057,16 +1054,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </div>
       ) : null}
 
-      {(events ?? []).length > 0 ? (
+      {(events ?? []).filter((e) => e.status === "open").length > 0 ? (
         <section className="surface-card mb-6 rounded-2xl p-4 md:p-5">
           <div className="mb-4">
             <h2 className="text-lg font-semibold text-zinc-900">Eventos</h2>
             <p className="text-sm text-zinc-600">Clica em "Editar" para gerir inscrições, valores e datas.</p>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="max-h-[40vh] overflow-y-auto overflow-x-auto pr-1">
             <table className="w-full text-sm text-zinc-700">
-              <thead>
+              <thead className="sticky top-0 bg-white/90 backdrop-blur-sm">
                 <tr className="border-b border-line/70 text-left text-xs uppercase tracking-wider text-muted">
                   <th className="pb-2 pr-4 font-semibold">Nome</th>
                   <th className="pb-2 pr-4 font-semibold">Data</th>
@@ -1076,7 +1073,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/50">
-                {(events ?? []).map((event) => (
+                {(events ?? []).filter((e) => e.status === "open").map((event) => (
                   <tr key={event.id} className="hover:bg-white/50">
                     <td className="py-2 pr-4 font-medium text-zinc-900">{event.title}</td>
                     <td className="py-2 pr-4">{new Date(event.event_date).toLocaleDateString("pt-PT")}</td>

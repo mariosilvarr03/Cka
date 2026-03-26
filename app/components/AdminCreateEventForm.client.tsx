@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type AthleteOption = {
   user_id: string;
@@ -10,12 +11,36 @@ type AthleteOption = {
 
 type Props = {
   athletes: AthleteOption[];
+  athleteName: string;
   action: (formData: FormData) => Promise<void>;
 };
 
-export default function AdminCreateEventForm({ athletes, action }: Props) {
+export default function AdminCreateEventForm({ athletes, athleteName, action }: Props) {
   const formRef = useRef<HTMLFormElement>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [filterValue, setFilterValue] = useState(athleteName);
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  function applyFilter() {
+    const params = new URLSearchParams(searchParams.toString());
+    if (filterValue.trim()) {
+      params.set("athleteName", filterValue.trim());
+    } else {
+      params.delete("athleteName");
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  function clearFilter() {
+    setFilterValue("");
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("athleteName");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     setValidationError(null);
@@ -91,6 +116,35 @@ export default function AdminCreateEventForm({ athletes, action }: Props) {
         <p className="sticky top-0 z-10 mb-3 border-b border-line/70 bg-white/95 pb-2 text-sm font-semibold text-zinc-800 backdrop-blur-sm">
           Atletas inscritos e valor a pagar
         </p>
+
+        {/* Inline athlete filter — uses div to avoid nested <form> */}
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
+          <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
+            Pesquisar atleta por nome
+            <input
+              type="text"
+              value={filterValue}
+              onChange={(e) => setFilterValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyFilter(); } }}
+              placeholder="Ex: Joao"
+              className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={applyFilter}
+            className="btn-ghost h-10 rounded-lg px-4 font-medium hover:bg-white"
+          >
+            Pesquisar atleta
+          </button>
+          <button
+            type="button"
+            onClick={clearFilter}
+            className="btn-ghost inline-flex h-10 items-center justify-center rounded-lg px-4 font-medium hover:bg-white"
+          >
+            Limpar
+          </button>
+        </div>
 
         {athletes.length === 0 ? (
           <p className="text-sm text-zinc-600">
