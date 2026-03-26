@@ -3,7 +3,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { ConfirmRemoveButton } from "./ConfirmRemoveButton";
 
+// NOTE: redirect() throws a NEXT_REDIRECT error internally.
+// If this helper is ever called inside a try/catch, the catch block MUST
+// re-throw redirect errors: `if (isRedirectError(error)) throw error;`
+// (import isRedirectError from 'next/dist/client/components/redirect-error')
 async function assertAdmin() {
   const supabase = await createClient();
   const {
@@ -37,7 +42,6 @@ type Registration = {
   athlete_name: string;
   athlete_email: string;
   charge_amount: number | null;
-  charge_status: string | null;
   paid: boolean;
 };
 
@@ -128,6 +132,7 @@ export default async function EventEditPage({
     const amount = Number(rawAmount);
 
     if (!eventId || !athleteId || Number.isNaN(amount) || amount < 0) {
+      // amount === 0 is intentional: allows free (isento) registrations
       redirect(`/admin/eventos/${eventId}?addError=${encodeURIComponent("Dados inválidos")}`);
     }
 
@@ -280,6 +285,29 @@ export default async function EventEditPage({
       redirect(`/admin/eventos/${eventId}?amountError=${encodeURIComponent("Dados inválidos")}`);
     }
 
+    // Verify the charge belongs to this event (via its product)
+    const { data: eventProduct } = await adminDb
+      .from("products")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("type", "event_registration")
+      .maybeSingle();
+
+    if (!eventProduct) {
+      redirect(`/admin/eventos/${eventId}?amountError=${encodeURIComponent("Produto do evento não encontrado")}`);
+    }
+
+    const { data: chargeCheck } = await adminDb
+      .from("charges")
+      .select("id")
+      .eq("id", chargeId)
+      .eq("product_id", eventProduct.id)
+      .maybeSingle();
+
+    if (!chargeCheck) {
+      redirect(`/admin/eventos/${eventId}?amountError=${encodeURIComponent("Cobrança não pertence a este evento")}`);
+    }
+
     // Cancel pending/created intents before updating amount to avoid stale intents
     await adminDb
       .from("payment_intents")
@@ -357,7 +385,6 @@ export default async function EventEditPage({
     athlete_email: r.profiles?.email ?? "—",
     charge_amount:
       typeof r.charges?.amount === "number" ? r.charges.amount : Number(r.charges?.amount ?? 0),
-    charge_status: r.charges?.status ?? null,
     paid: r.charge_id ? paidSet.has(r.charge_id) : false,
   }));
 
@@ -609,12 +636,7 @@ export default async function EventEditPage({
                           <input type="hidden" name="event_id" value={event.id} />
                           <input type="hidden" name="registration_id" value={reg.id} />
                           <input type="hidden" name="charge_id" value={reg.charge_id ?? ""} />
-                          <button
-                            type="submit"
-                            className="inline-flex h-8 items-center rounded-lg border border-danger/20 px-3 text-xs font-semibold text-danger hover:bg-red-50"
-                          >
-                            Remover
-                          </button>
+                          <ConfirmRemoveButton />
                         </form>
                       ) : null}
                     </td>
