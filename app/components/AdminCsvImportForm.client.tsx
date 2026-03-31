@@ -56,7 +56,7 @@ function parseCSVText(text: string, categories: CategoryOption[]): ParsedRow[] {
 function parseXLSXBuffer(buffer: ArrayBuffer, categories: CategoryOption[]): ParsedRow[] {
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const json = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { header: 1, defval: "" });
+  const json = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "" });
   if (json.length === 0) return [];
 
   // Detect if first row is a header

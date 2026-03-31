@@ -197,9 +197,9 @@ web3 = 30
 # [auth.captcha]
 # enabled = true
 # provider = "hcaptcha"
-# secret = ""
+	site_url = "https://teudominio.pt"
 
-[auth.email]
+	additional_redirect_urls = ["https://teudominio.pt"]
 # Allow/disallow new user signups via email to your project.
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
