@@ -403,7 +403,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     const appBaseUrl =
       process.env.NEXT_PUBLIC_SITE_URL ??
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
-    const inviteRedirectTo = appBaseUrl ? `${appBaseUrl}/auth/callback` : undefined;
+    const inviteRedirectTo = appBaseUrl ? `${appBaseUrl}/login` : undefined;
 
     const { data: invitedData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
       data: {
@@ -474,7 +474,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     const appBaseUrl =
       process.env.NEXT_PUBLIC_SITE_URL ??
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
-    const inviteRedirectTo = appBaseUrl ? `${appBaseUrl}/auth/callback` : undefined;
+    const inviteRedirectTo = appBaseUrl ? `${appBaseUrl}/login` : undefined;
 
     let created = 0;
     const errors: string[] = [];
