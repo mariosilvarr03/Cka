@@ -54,6 +54,8 @@ export default async function PaymentPage({ params }: PageProps) {
     .maybeSingle<Product>();
 
   const alreadyPaid = charge.status === "paid";
+  const paymentsProviderMode = process.env.PAYMENTS_PROVIDER_MODE || "mock";
+  const pagamentosIndisponiveis = paymentsProviderMode === "mock";
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-5 sm:px-5 sm:py-7 md:px-8 md:py-10">
@@ -78,6 +80,12 @@ export default async function PaymentPage({ params }: PageProps) {
             <strong>Periodo:</strong> {charge.billing_month ?? "-"}/{charge.billing_year ?? "-"}
           </p>
         </div>
+
+        {pagamentosIndisponiveis && (
+          <div className="rounded-lg border border-warning/20 bg-yellow-50 p-4 text-warning mb-4">
+            Os pagamentos estão temporariamente indisponíveis enquanto aguardamos aprovação do parceiro de pagamentos. Podes voltar mais tarde para concluir o pagamento.
+          </div>
+        )}
 
         {alreadyPaid ? (
           <div className="rounded-lg border border-ok/20 bg-emerald-50 p-4 text-ok">
