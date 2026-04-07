@@ -181,7 +181,10 @@ export async function POST(request: Request) {
 
   const easypayPayload = isLikelyEasypayPayload(payload);
 
-  const provider = String(payload.provider ?? (easypayPayload ? "easypay" : "")).trim();
+  const providerFromPayload = String(payload.provider ?? "").trim().toLowerCase();
+  const provider = easypayPayload && (!providerFromPayload || providerFromPayload === "generic")
+    ? "easypay"
+    : providerFromPayload;
   const eventType = String(payload.event_type ?? payload.type ?? "").trim();
 
   let externalEventId = String(payload.external_event_id ?? "").trim();
@@ -326,6 +329,17 @@ export async function POST(request: Request) {
       .from("payment_intents")
       .select("id, charge_id, amount, method, status")
       .eq("provider", provider)
+      .eq("charge_id", chargeIdFromPayload)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<IntentRow>();
+    intent = data ?? null;
+  }
+
+  if (!intent && chargeIdFromPayload) {
+    const { data } = await adminClient
+      .from("payment_intents")
+      .select("id, charge_id, amount, method, status")
       .eq("charge_id", chargeIdFromPayload)
       .order("created_at", { ascending: false })
       .limit(1)
