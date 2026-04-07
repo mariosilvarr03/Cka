@@ -317,29 +317,13 @@ export default function PaymentMethodForm({ chargeId, amount }: PaymentMethodFor
       </div>
 
 
-      {/* Botão original de pagamento comentado */}
-      {false && (
-        <button
-          type="submit"
-          disabled={loading}
-          className="btn-primary h-11 w-full rounded-lg px-5 font-semibold disabled:cursor-not-allowed disabled:opacity-60 sm:h-10 sm:w-auto"
-        >
-          {loading ? "A iniciar..." : "Continuar para pagamento"}
-        </button>
-      )}
-
-      {/* Botão novo desativado */}
       <button
-        type="button"
-        disabled
-        className="btn-primary h-11 w-full rounded-lg px-5 font-semibold opacity-60 cursor-not-allowed sm:h-10 sm:w-auto"
+        type="submit"
+        disabled={loading}
+        className="btn-primary h-11 w-full rounded-lg px-5 font-semibold disabled:cursor-not-allowed disabled:opacity-60 sm:h-10 sm:w-auto"
       >
-        Pagamentos desativados
+        {loading ? "A iniciar..." : "Continuar para pagamento"}
       </button>
-
-      <div className="rounded-lg border border-warning/20 bg-yellow-50 p-3 text-sm text-warning mt-2">
-        Os pagamentos estão temporariamente desativados. Por favor, volta mais tarde.
-      </div>
 
       {error ? (
         <div className="rounded-lg border border-danger/20 bg-red-50 p-3 text-sm text-danger">

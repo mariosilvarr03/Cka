@@ -43,7 +43,16 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && request.nextUrl.pathname === "/login") {
+  if (user?.user_metadata?.needs_password_setup === true) {
+    const isSetupRoute =
+      request.nextUrl.pathname.startsWith("/definir-password") ||
+      request.nextUrl.pathname.startsWith("/auth");
+    if (!isSetupRoute) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/definir-password";
+      return NextResponse.redirect(url);
+    }
+  } else if (user && request.nextUrl.pathname === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

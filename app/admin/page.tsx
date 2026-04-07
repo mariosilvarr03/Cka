@@ -408,6 +408,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     const { data: invitedData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
       data: {
         full_name: fullName,
+        needs_password_setup: true,
       },
       ...(inviteRedirectTo ? { redirectTo: inviteRedirectTo } : {}),
     });
@@ -488,7 +489,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
       const { data: invitedData, error: inviteError } =
         await adminClient.auth.admin.inviteUserByEmail(email, {
-          data: { full_name: fullName },
+          data: { full_name: fullName, needs_password_setup: true },
           ...(inviteRedirectTo ? { redirectTo: inviteRedirectTo } : {}),
         });
 
