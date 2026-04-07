@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 type LoginPageProps = {
   searchParams: Promise<{
     error?: string;
+    resetError?: string;
+    resetOk?: string;
   }>;
 };
 
@@ -30,6 +32,31 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     }
 
     redirect("/");
+  }
+
+  async function requestPasswordReset(formData: FormData) {
+    "use server";
+
+    const email = String(formData.get("reset_email") ?? "").trim().toLowerCase();
+
+    if (!email) {
+      redirect("/login?resetError=Indica+um+email+valido");
+    }
+
+    const supabase = await createClient();
+    const appBaseUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      ...(appBaseUrl ? { redirectTo: `${appBaseUrl}/login` } : {}),
+    });
+
+    if (error) {
+      redirect("/login?resetError=Nao+foi+possivel+enviar+o+email+de+recuperacao");
+    }
+
+    redirect("/login?resetOk=1");
   }
 
   const params = await searchParams;
@@ -63,6 +90,18 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             </p>
           ) : null}
 
+          {params.resetError ? (
+            <p className="mb-4 rounded-lg border border-danger/20 bg-red-50 p-3 text-sm text-danger">
+              {params.resetError}
+            </p>
+          ) : null}
+
+          {params.resetOk ? (
+            <p className="mb-4 rounded-lg border border-ok/20 bg-emerald-50 p-3 text-sm text-ok">
+              Enviamos um email com instrucoes para definires uma nova palavra-passe.
+            </p>
+          ) : null}
+
           <form action={signIn} className="space-y-4">
             <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
               Email
@@ -88,6 +127,26 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
             <button type="submit" className="btn-primary h-11 w-full rounded-lg font-semibold">
               Entrar
+            </button>
+          </form>
+
+          <div className="my-5 border-t border-line/70" />
+
+          <form action={requestPasswordReset} className="space-y-3">
+            <p className="text-sm font-semibold text-zinc-800">Nao consegues entrar?</p>
+            <p className="text-sm text-zinc-600">Pede um email para definir ou recuperar a palavra-passe.</p>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
+              Email para recuperar acesso
+              <input
+                type="email"
+                name="reset_email"
+                required
+                className="h-11 rounded-lg border border-line bg-white px-3 text-zinc-900"
+                placeholder="teuemail@exemplo.com"
+              />
+            </label>
+            <button type="submit" className="btn-ghost h-11 w-full rounded-lg font-semibold">
+              Enviar email de recuperacao
             </button>
           </form>
         </section>
