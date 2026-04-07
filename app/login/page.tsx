@@ -51,7 +51,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      ...(appBaseUrl ? { redirectTo: `${appBaseUrl}/login` } : {}),
+      ...(appBaseUrl ? { redirectTo: `${appBaseUrl}/auth/callback?type=recovery` } : {}),
     });
 
     if (error) {
@@ -63,23 +63,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   const params = await searchParams;
 
-  const code = String(params.code ?? "").trim();
-  const flowType = String(params.type ?? "").trim().toLowerCase();
-
-  if (code) {
-    const supabase = await createClient();
-    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-
-    if (exchangeError) {
-      redirect("/login?error=Link+de+acesso+invalido+ou+expirado");
-    }
-
-    if (flowType === "recovery" || flowType === "invite") {
-      redirect("/definir-password");
-    }
-
-    redirect("/");
-  }
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center px-5 py-10 md:px-8">
