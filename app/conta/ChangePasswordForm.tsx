@@ -42,7 +42,10 @@ export default function ChangePasswordForm() {
 
     setPassword("");
     setConfirmPassword("");
-    setSuccess("Palavra-passe atualizada com sucesso.");
+    setSuccess("Palavra-passe atualizada com sucesso. A redirecionar...");
+    setTimeout(() => {
+      window.location.href = "/";
+    }, 1500);
   }
 
   return (

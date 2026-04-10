@@ -8,9 +8,11 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    await supabase.auth.exchangeCodeForSession(code);
+    const { data } = await supabase.auth.exchangeCodeForSession(code);
 
-    if (type === "recovery" || type === "invite") {
+    const needsSetup = data?.session?.user?.user_metadata?.needs_password_setup === true;
+
+    if (type === "recovery" || type === "invite" || needsSetup) {
       return NextResponse.redirect(new URL("/definir-password", request.url));
     }
   }
