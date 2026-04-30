@@ -73,13 +73,13 @@ export default function AdminChargesFilterForm({
   }
 
   return (
-    <form onSubmit={applyFilters} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_1.5fr_1fr_1.2fr_auto] md:items-end">
-      <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
+    <form onSubmit={applyFilters} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1.5fr_1fr_1.2fr_auto] md:items-end md:gap-3">
+      <label className="flex flex-col gap-1 text-xs font-semibold text-zinc-700 md:gap-2 md:text-sm">
         Mes
         <select
           name="month"
           defaultValue={String(selectedMonth)}
-          className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+          className="h-9 rounded-lg border border-line bg-white px-3 text-sm text-zinc-900 md:h-10 md:text-base"
         >
           {months.map((month) => (
             <option key={month} value={month}>
@@ -89,12 +89,12 @@ export default function AdminChargesFilterForm({
         </select>
       </label>
 
-      <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
+      <label className="flex flex-col gap-1 text-xs font-semibold text-zinc-700 md:gap-2 md:text-sm">
         Ano
         <select
           name="year"
           defaultValue={String(selectedYear)}
-          className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+          className="h-9 rounded-lg border border-line bg-white px-3 text-sm text-zinc-900 md:h-10 md:text-base"
         >
           {years.map((year) => (
             <option key={year} value={year}>
@@ -104,23 +104,23 @@ export default function AdminChargesFilterForm({
         </select>
       </label>
 
-      <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
+      <label className="flex flex-col gap-1 text-xs font-semibold text-zinc-700 md:gap-2 md:text-sm">
         Pesquisar atleta
         <input
           type="text"
           name="q"
           defaultValue={searchQuery}
           placeholder="Ex: atleta1"
-          className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+          className="h-9 rounded-lg border border-line bg-white px-3 text-sm text-zinc-900 md:h-10 md:text-base"
         />
       </label>
 
-      <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
+      <label className="flex flex-col gap-1 text-xs font-semibold text-zinc-700 md:gap-2 md:text-sm">
         Estado
         <select
           name="paymentStatus"
           defaultValue={paymentStatus}
-          className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+          className="h-9 rounded-lg border border-line bg-white px-3 text-sm text-zinc-900 md:h-10 md:text-base"
         >
           <option value="all">Todos</option>
           <option value="created">A iniciar</option>
@@ -132,12 +132,12 @@ export default function AdminChargesFilterForm({
         </select>
       </label>
 
-      <label className="flex flex-col gap-2 text-sm font-semibold text-zinc-700">
+      <label className="flex flex-col gap-1 text-xs font-semibold text-zinc-700 md:gap-2 md:text-sm">
         Evento
         <select
           name="eventId"
           defaultValue={selectedEventId}
-          className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
+          className="h-9 rounded-lg border border-line bg-white px-3 text-sm text-zinc-900 md:h-10 md:text-base"
         >
           <option value="all">Todos</option>
           {events.map((event) => (
@@ -148,7 +148,7 @@ export default function AdminChargesFilterForm({
         </select>
       </label>
 
-      <button type="submit" className="btn-primary h-10 rounded-lg px-4 font-semibold">
+      <button type="submit" className="btn-primary h-9 rounded-lg px-4 text-sm font-semibold md:h-10 md:text-base">
         Aplicar filtros
       </button>
     </form>

@@ -58,15 +58,15 @@ export default async function PaymentPage({ params }: PageProps) {
   const pagamentosIndisponiveis = paymentsProviderMode === "mock";
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-5 sm:px-5 sm:py-7 md:px-8 md:py-10">
-      <header className="surface-card mb-5 rounded-2xl p-4 sm:p-5 md:mb-6 md:p-7">
+    <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-4 sm:px-5 sm:py-7 md:px-8 md:py-10">
+      <header className="surface-card mb-4 rounded-xl p-3.5 sm:mb-5 sm:rounded-2xl sm:p-5 md:mb-6 md:p-7">
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand">Pagamento</p>
         <h1 className="section-title text-foreground">Pagar mensalidade</h1>
         <p className="muted mt-2">Escolhe o metodo de pagamento para concluir esta cobranca.</p>
       </header>
 
-      <section className="surface-card rounded-2xl p-4 sm:p-5 md:p-6">
-        <div className="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-line/80 bg-white/75 p-4 text-sm text-zinc-700 md:mb-5 md:grid-cols-2">
+      <section className="surface-card rounded-xl p-3.5 sm:rounded-2xl sm:p-5 md:p-6">
+        <div className="mb-4 grid grid-cols-1 gap-2.5 rounded-xl border border-line/80 bg-white/75 p-3 text-sm text-zinc-700 sm:gap-3 sm:p-4 md:mb-5 md:grid-cols-2">
           <p>
             <strong>Produto:</strong> {product?.name ?? "Mensalidade"}
           </p>

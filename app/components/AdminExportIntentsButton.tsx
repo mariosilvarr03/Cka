@@ -44,10 +44,11 @@ export default function AdminExportIntentsButton({ rows, paymentStatus }: Export
   return (
     <button
       type="button"
-      className="btn-secondary h-10 rounded-lg px-4 font-semibold mt-2 md:mt-0"
+      className="btn-secondary mt-2 h-9 w-full rounded-lg px-4 text-sm font-semibold md:mt-0 md:h-10 md:w-auto md:text-base"
       onClick={exportIntentsCsv}
     >
-      Exportar intents ({paymentStatus === 'all' ? 'pendentes/falhadas' : paymentStatus})
+      Exportar intents
+      <span className="hidden md:inline"> ({paymentStatus === 'all' ? 'pendentes/falhadas' : paymentStatus})</span>
     </button>
   );
 }

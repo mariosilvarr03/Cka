@@ -237,8 +237,8 @@ export default async function Home({ searchParams }: PageProps) {
   const pendingThisMonth = Math.max(chargesInPeriod.length - paidThisMonth, 0);
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-6xl px-4 py-5 sm:px-5 sm:py-7 md:px-8 md:py-10">
-      <header className="surface-card mb-6 rounded-2xl p-4 sm:p-5 md:mb-8 md:p-7">
+    <main className="mx-auto min-h-screen w-full max-w-6xl px-4 py-4 sm:px-5 sm:py-7 md:px-8 md:py-10">
+      <header className="surface-card mb-5 rounded-xl p-3.5 sm:mb-6 sm:rounded-2xl sm:p-5 md:mb-8 md:p-7">
         <div className="mb-5 flex flex-col gap-4 md:mb-6 md:flex-row md:items-start md:justify-between">
           <div className="flex flex-col gap-2">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand">Portal do Atleta</p>
@@ -262,16 +262,16 @@ export default async function Home({ searchParams }: PageProps) {
           </form>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-line/80 bg-white/75 p-4">
+        <div className="grid grid-cols-1 gap-2.5 sm:gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-line/80 bg-white/75 p-3 sm:p-4">
             <p className="text-xs uppercase tracking-widest text-muted">Periodo</p>
             <p className="mt-1 text-xl font-semibold text-foreground">{selectedMonth}/{selectedYear}</p>
           </div>
-          <div className="rounded-xl border border-line/80 bg-white/75 p-4">
+          <div className="rounded-xl border border-line/80 bg-white/75 p-3 sm:p-4">
             <p className="text-xs uppercase tracking-widest text-muted">Pagas no periodo</p>
             <p className="mt-1 text-xl font-semibold text-ok">{paidThisMonth}</p>
           </div>
-          <div className="rounded-xl border border-line/80 bg-white/75 p-4">
+          <div className="rounded-xl border border-line/80 bg-white/75 p-3 sm:p-4">
             <p className="text-xs uppercase tracking-widest text-muted">Pendentes no periodo</p>
             <p className="mt-1 text-xl font-semibold text-warn">{pendingThisMonth}</p>
           </div>
@@ -303,7 +303,7 @@ export default async function Home({ searchParams }: PageProps) {
           const paid = charge.status === "paid" || chargePayments.length > 0;
 
           return (
-            <article key={charge.id} className="surface-card rounded-2xl p-5 md:p-6">
+            <article key={charge.id} className="surface-card rounded-xl p-4 sm:rounded-2xl sm:p-5 md:p-6">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-lg font-semibold text-zinc-900">
                   {product?.name ?? "Mensalidade"}
@@ -358,7 +358,7 @@ export default async function Home({ searchParams }: PageProps) {
         })}
       </section>
 
-      <section className="mt-10 space-y-4">
+      <section className="mt-8 space-y-4 sm:mt-10">
         <div className="mb-2">
           <h2 className="section-title text-foreground">Tudo por pagar</h2>
           <p className="muted">Lista de pendentes e atrasados, incluindo mensalidades e eventos.</p>
@@ -381,7 +381,7 @@ export default async function Home({ searchParams }: PageProps) {
           const event = eventByChargeId.get(charge.id);
 
           return (
-            <article key={`outstanding-${charge.id}`} className="surface-card rounded-2xl p-5 md:p-6">
+            <article key={`outstanding-${charge.id}`} className="surface-card rounded-xl p-4 sm:rounded-2xl sm:p-5 md:p-6">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-lg font-semibold text-zinc-900">
                   {product?.name ?? "Mensalidade"}

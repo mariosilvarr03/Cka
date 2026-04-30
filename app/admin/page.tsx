@@ -616,6 +616,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     const search = String(formData.get("q") ?? "").trim();
     const paymentStatus = String(formData.get("payment_status") ?? "all");
     const eventId = String(formData.get("event_id") ?? "all");
+    const paymentMethod = String(formData.get("payment_method") ?? "cash");
 
     const redirectParams = new URLSearchParams({
       month: String(month),
@@ -655,8 +656,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     }
 
     const amount = Number(rawAmount);
+    const isValidManualMethod = paymentMethod === "cash" || paymentMethod === "bank_transfer";
 
-    if (!chargeId || Number.isNaN(amount) || amount <= 0) {
+    if (!chargeId || Number.isNaN(amount) || amount <= 0 || !isValidManualMethod) {
       redirect(`/admin?${redirectParams.toString()}&error=Dados+invalidos`);
     }
 
@@ -664,6 +666,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       p_charge_id: chargeId,
       p_amount: amount,
       p_notes: notes || null,
+      p_method: paymentMethod,
     });
 
     if (error) {
@@ -931,8 +934,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   );
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-7xl px-5 py-8 md:px-8 md:py-10">
-      <header className="surface-card mb-8 rounded-2xl p-5 md:p-7">
+    <main className="mx-auto min-h-screen w-full max-w-7xl px-4 py-5 sm:px-5 sm:py-8 md:px-8 md:py-10">
+      <header className="surface-card mb-6 rounded-xl p-4 sm:mb-8 sm:rounded-2xl sm:p-5 md:p-7">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex flex-col gap-2">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand">Painel de Administracao</p>
@@ -952,7 +955,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </div>
       </header>
 
-      <section className="surface-card mb-6 rounded-2xl p-4 md:p-5">
+      <section className="surface-card mb-5 rounded-xl p-3.5 sm:mb-6 sm:rounded-2xl sm:p-4 md:p-5">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-zinc-900">Monitorizacao de pagamentos</h2>
@@ -1229,7 +1232,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </section>
       ) : null}
 
-      <section className="surface-card sticky top-4 z-20 mb-6 rounded-2xl p-4 md:p-5 backdrop-blur-sm">
+      <section className="surface-card z-20 mb-4 rounded-2xl p-3 md:sticky md:top-4 md:mb-6 md:p-5 backdrop-blur-sm">
         <AdminChargesFilterAndExport
           selectedMonth={selectedMonth}
           selectedYear={selectedYear}
@@ -1302,7 +1305,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       ) : null}
 
       {!chargesError && filteredCharges.length === 0 ? (
-        <div className="surface-card rounded-xl p-6 text-zinc-700">
+        <div className="surface-card rounded-xl p-4 sm:p-6 text-zinc-700">
           Sem cobrancas encontradas com os filtros atuais.
         </div>
       ) : null}
@@ -1315,7 +1318,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           const alreadyPaid = charge.status === "paid" || Boolean(payment);
 
           return (
-            <article key={charge.id} className="surface-card rounded-2xl p-5 md:p-6">
+            <article key={charge.id} className="surface-card rounded-xl p-4 sm:rounded-2xl sm:p-5 md:p-6">
               <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <h2 className="text-lg font-semibold text-zinc-900">
@@ -1343,7 +1346,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               ) : null}
 
               {!alreadyPaid ? (
-                <form action={markCashPayment} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
+                <form action={markCashPayment} className="grid grid-cols-1 gap-3">
                   <input type="hidden" name="charge_id" value={charge.id} />
                   <input type="hidden" name="amount" value={String(charge.amount)} />
                   <input type="hidden" name="month" value={String(selectedMonth)} />
@@ -1359,9 +1362,24 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     className="h-10 rounded-lg border border-line bg-white px-3 text-zinc-900"
                   />
 
-                  <button type="submit" className="btn-primary h-10 rounded-lg px-4 font-semibold">
-                    Marcar pago em mao
-                  </button>
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    <button
+                      type="submit"
+                      name="payment_method"
+                      value="cash"
+                      className="btn-primary h-10 rounded-lg px-4 font-semibold"
+                    >
+                      Pagou em dinheiro
+                    </button>
+                    <button
+                      type="submit"
+                      name="payment_method"
+                      value="bank_transfer"
+                      className="h-10 rounded-lg border border-line bg-white px-4 font-semibold text-zinc-900 hover:bg-zinc-50"
+                    >
+                      Pagou em transferencia
+                    </button>
+                  </div>
                 </form>
               ) : null}
             </article>

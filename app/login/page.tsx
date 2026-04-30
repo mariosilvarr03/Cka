@@ -65,25 +65,25 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center px-5 py-10 md:px-8">
-      <div className="surface-card grid overflow-hidden rounded-2xl md:grid-cols-[1.1fr_1fr]">
-        <section className="bg-gradient-to-br from-brand/95 to-brand-2/95 p-7 text-white md:p-9">
+    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center px-4 py-4 sm:px-5 sm:py-6 md:px-8 md:py-10">
+      <div className="surface-card grid overflow-hidden rounded-xl sm:rounded-2xl md:grid-cols-[1.1fr_1fr]">
+        <section className="bg-gradient-to-br from-brand/95 to-brand-2/95 p-5 text-white sm:p-7 md:p-9">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-orange-100">Karate Club</p>
-          <h1 className="mt-2 text-4xl font-bold leading-tight">Portal de Pagamentos</h1>
+          <h1 className="mt-2 text-3xl font-bold leading-tight sm:text-4xl">Portal de Pagamentos</h1>
           <p className="mt-4 max-w-md text-sm text-orange-50/90">
             Gerir mensalidades, acompanhar estados de pagamento e manter o historico financeiro dos atletas num unico lugar.
           </p>
 
-          <div className="mt-8 grid gap-3 text-sm">
-            <div className="rounded-xl border border-white/30 bg-white/10 p-3">Acesso rapido para atletas e administracao</div>
-            <div className="rounded-xl border border-white/30 bg-white/10 p-3">Controlo mensal com estados pago e por pagar</div>
-            <div className="rounded-xl border border-white/30 bg-white/10 p-3">Base pronta para adicionar eventos e inscricoes</div>
+          <div className="mt-5 grid gap-2 text-sm sm:mt-8 sm:gap-3">
+            <div className="rounded-xl border border-white/30 bg-white/10 p-2.5 sm:p-3">Acesso rapido para atletas e administracao</div>
+            <div className="rounded-xl border border-white/30 bg-white/10 p-2.5 sm:p-3">Controlo mensal com estados pago e por pagar</div>
+            <div className="rounded-xl border border-white/30 bg-white/10 p-2.5 sm:p-3">Base pronta para adicionar eventos e inscricoes</div>
           </div>
         </section>
 
-        <section className="p-6 md:p-8">
+        <section className="p-4 sm:p-6 md:p-8">
           <h2 className="mb-1 text-2xl font-bold text-zinc-900">Entrar</h2>
-          <p className="mb-6 text-sm text-zinc-600">Usa o teu email e password para continuar.</p>
+          <p className="mb-5 text-sm text-zinc-600 sm:mb-6">Usa o teu email e password para continuar.</p>
 
           <InviteAcceptHandler />
 
@@ -133,7 +133,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             </button>
           </form>
 
-          <div className="my-5 border-t border-line/70" />
+          <div className="my-4 border-t border-line/70 sm:my-5" />
 
           <form action={requestPasswordReset} className="space-y-3">
             <p className="text-sm font-semibold text-zinc-800">Nao consegues entrar?</p>
